@@ -12,10 +12,16 @@ from abc import ABC, abstractmethod
 import pandas as pd
 
 
+from typing import Any, Dict
+
+
 class BaseLoader(ABC):
     """
     Abstract base class for all database loaders.
     """
+
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
 
     @abstractmethod
     def connect(self):

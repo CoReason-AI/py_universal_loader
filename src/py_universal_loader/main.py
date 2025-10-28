@@ -8,11 +8,17 @@
 #
 # Source Code: https://github.com/CoReason-AI/py_universal_loader
 
-from typing import Any, Dict
+from typing import Any, Dict, Type
 
 from loguru import logger
 
 from .base import BaseLoader
+from .sqlite_loader import SQLiteLoader
+
+# Mapping of db_type to loader class
+LOADER_MAPPING: Dict[str, Type[BaseLoader]] = {
+    "sqlite": SQLiteLoader,
+}
 
 
 def get_loader(config: Dict[str, Any]) -> BaseLoader:
@@ -32,10 +38,12 @@ def get_loader(config: Dict[str, Any]) -> BaseLoader:
     db_type = config.get("db_type")
     logger.info(f"Attempting to get loader for db_type: {db_type}")
 
-    # In the future, this will have a mapping of db_type to loader class
-    # For now, we will just raise an error for any type.
-
     if db_type is None:
         raise ValueError("Configuration dictionary must contain a 'db_type' key.")
+
+    loader_class = LOADER_MAPPING.get(db_type)
+
+    if loader_class:
+        return loader_class(config)
 
     raise ValueError(f"Unsupported database type: {db_type}")
