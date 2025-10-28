@@ -25,5 +25,7 @@ def test_get_loader_no_db_type():
     """
     Test that get_loader raises a ValueError if 'db_type' is not in the config.
     """
-    with pytest.raises(ValueError, match="Configuration dictionary must contain a 'db_type' key."):
+    with pytest.raises(
+        ValueError, match="Configuration dictionary must contain a 'db_type' key."
+    ):
         get_loader({})
