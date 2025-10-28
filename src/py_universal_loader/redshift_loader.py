@@ -39,11 +39,7 @@ class RedshiftLoader(BaseLoader):
                 password=self.config["password"],
                 dbname=self.config["dbname"],
             )
-            self.s3_client = boto3.client(
-                "s3",
-                aws_access_key_id=self.config["aws_access_key_id"],
-                aws_secret_access_key=self.config["aws_secret_access_key"],
-            )
+            self.s3_client = boto3.client("s3")
         except Exception as e:
             logger.error(f"Failed to connect to Redshift or S3: {e}")
             raise

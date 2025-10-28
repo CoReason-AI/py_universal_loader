@@ -36,8 +36,6 @@ def redshift_config():
         "password": "test_password",
         "dbname": "test_db",
         "s3_bucket": "test_bucket",
-        "aws_access_key_id": "test_access_key",
-        "aws_secret_access_key": "test_secret_key",
         "iam_role_arn": "test_iam_role",
     }
 
@@ -65,11 +63,7 @@ def test_redshift_loader_connect(
         password="test_password",
         dbname="test_db",
     )
-    mock_boto3_client.assert_called_once_with(
-        "s3",
-        aws_access_key_id="test_access_key",
-        aws_secret_access_key="test_secret_key",
-    )
+    mock_boto3_client.assert_called_once_with("s3")
     assert loader.connection == mock_conn
     assert loader.s3_client == mock_s3
     loader.close()
