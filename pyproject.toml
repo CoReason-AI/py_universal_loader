@@ -10,6 +10,7 @@ packages = [{include = "py_universal_loader", from = "src"}]
 [tool.poetry.dependencies]
 python = ">=3.12"
 loguru = "^0.7.2"
+pandas = "^2.3.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.2"
