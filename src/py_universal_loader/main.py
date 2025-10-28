@@ -15,6 +15,7 @@ from loguru import logger
 from .base import BaseLoader
 from .duckdb_loader import DuckDBLoader
 from .postgres_loader import PostgresLoader
+from .bigquery_loader import BigQueryLoader
 from .redshift_loader import RedshiftLoader
 from .sqlite_loader import SQLiteLoader
 
@@ -24,6 +25,7 @@ LOADER_MAPPING: Dict[str, Type[BaseLoader]] = {
     "duckdb": DuckDBLoader,
     "postgres": PostgresLoader,
     "redshift": RedshiftLoader,
+    "bigquery": BigQueryLoader,
 }
 
 
