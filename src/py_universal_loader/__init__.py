@@ -15,7 +15,3 @@ A unified, high-performance Python package for bulk-loading pandas DataFrames in
 __version__ = "0.1.0"
 __author__ = "Gowtham A Rao"
 __email__ = "gowtham.rao@coreason.ai"
-
-from .main import hello_world
-
-__all__ = ["hello_world"]
