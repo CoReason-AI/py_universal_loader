@@ -81,6 +81,7 @@ def test_sqlite_loader_load_dataframe(sample_df: pd.DataFrame):
     loader.load_dataframe(sample_df, "test_table")
 
     # Verify the data was loaded correctly
+    assert loader.connection is not None
     cursor = loader.connection.cursor()
     cursor.execute("SELECT * FROM test_table")
     rows = cursor.fetchall()
@@ -101,6 +102,7 @@ def test_sqlite_loader_load_dataframe_empty():
     loader.load_dataframe(empty_df, "test_table_empty")
 
     # Verify the table is empty
+    assert loader.connection is not None
     cursor = loader.connection.cursor()
     cursor.execute("SELECT * FROM test_table_empty")
     rows = cursor.fetchall()
@@ -114,7 +116,9 @@ def test_sqlite_loader_load_dataframe_no_connection(sample_df: pd.DataFrame):
     """
     config = {"db_type": "sqlite"}
     loader = SQLiteLoader(config)
-    with pytest.raises(ConnectionError, match="Database connection is not established."):
+    with pytest.raises(
+        ConnectionError, match="Database connection is not established."
+    ):
         loader.load_dataframe(sample_df, "test_table")
 
 
@@ -126,5 +130,7 @@ def test_sqlite_loader_load_dataframe_after_close(sample_df: pd.DataFrame):
     loader = SQLiteLoader(config)
     loader.connect()
     loader.close()
-    with pytest.raises(ConnectionError, match="Database connection is not established."):
+    with pytest.raises(
+        ConnectionError, match="Database connection is not established."
+    ):
         loader.load_dataframe(sample_df, "test_table")

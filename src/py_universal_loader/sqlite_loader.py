@@ -51,7 +51,5 @@ class SQLiteLoader(BaseLoader):
             raise ConnectionError("Database connection is not established.")
 
         logger.info(f"Loading dataframe into table: {table_name}")
-        df.to_sql(
-            table_name, self.connection, if_exists="replace", index=False
-        )
+        df.to_sql(table_name, self.connection, if_exists="replace", index=False)
         logger.info("Dataframe loaded successfully.")
