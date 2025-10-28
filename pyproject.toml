@@ -16,6 +16,7 @@ pyarrow = "^22.0.0"
 psycopg2-binary = "^2.9.11"
 boto3 = "^1.40.60"
 google-cloud-bigquery = "^3.38.0"
+snowflake-connector-python = {extras = ["pandas"], version = "^4.0.0"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.2"
