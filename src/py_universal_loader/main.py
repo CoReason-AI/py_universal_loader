@@ -9,8 +9,3 @@
 # Source Code: https://github.com/CoReason-AI/py_universal_loader
 
 from loguru import logger
-
-
-def hello_world():
-    logger.info("Hello World!")
-    return "Hello World!"
