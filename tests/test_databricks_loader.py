@@ -14,6 +14,7 @@ import pandas as pd
 
 from py_universal_loader.databricks_loader import DatabricksLoader
 
+
 class TestDatabricksLoader(unittest.TestCase):
     def setUp(self):
         self.config = {
@@ -38,6 +39,7 @@ class TestDatabricksLoader(unittest.TestCase):
         df = pd.DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
         with pytest.raises(NotImplementedError):
             self.loader.load_dataframe(df, "test_table")
+
 
 if __name__ == "__main__":
     unittest.main()
