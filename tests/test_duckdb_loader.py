@@ -99,9 +99,7 @@ def test_duckdb_loader_load_dataframe_empty():
 
     # Verify the table is empty
     assert loader.connection is not None
-    result_df = loader.connection.execute(
-        "SELECT * FROM test_table_empty"
-    ).fetchdf()
+    result_df = loader.connection.execute("SELECT * FROM test_table_empty").fetchdf()
     assert result_df.empty
     loader.close()
 
