@@ -18,6 +18,7 @@ from .postgres_loader import PostgresLoader
 from .bigquery_loader import BigQueryLoader
 from .redshift_loader import RedshiftLoader
 from .sqlite_loader import SQLiteLoader
+from .databricks_loader import DatabricksLoader
 
 # Mapping of db_type to loader class
 LOADER_MAPPING: Dict[str, Type[BaseLoader]] = {
@@ -26,6 +27,7 @@ LOADER_MAPPING: Dict[str, Type[BaseLoader]] = {
     "postgres": PostgresLoader,
     "redshift": RedshiftLoader,
     "bigquery": BigQueryLoader,
+    "databricks": DatabricksLoader,
 }
 
 
