@@ -13,11 +13,13 @@ from typing import Any, Dict, Type
 from loguru import logger
 
 from .base import BaseLoader
+from .duckdb_loader import DuckDBLoader
 from .sqlite_loader import SQLiteLoader
 
 # Mapping of db_type to loader class
 LOADER_MAPPING: Dict[str, Type[BaseLoader]] = {
     "sqlite": SQLiteLoader,
+    "duckdb": DuckDBLoader,
 }
 
 
