@@ -16,6 +16,7 @@ from .base import BaseLoader
 from loguru import logger
 import io
 
+
 class RedshiftLoader(BaseLoader):
     """
     Loader for Amazon Redshift.

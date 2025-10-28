@@ -44,7 +44,9 @@ def redshift_config():
 
 @patch("psycopg2.connect")
 @patch("boto3.client")
-def test_redshift_loader_connect(mock_boto3_client, mock_psycopg2_connect, redshift_config):
+def test_redshift_loader_connect(
+    mock_boto3_client, mock_psycopg2_connect, redshift_config
+):
     """
     Test the connect method for the RedshiftLoader.
     """
@@ -75,7 +77,9 @@ def test_redshift_loader_connect(mock_boto3_client, mock_psycopg2_connect, redsh
 
 @patch("psycopg2.connect")
 @patch("boto3.client")
-def test_redshift_loader_close(mock_boto3_client, mock_psycopg2_connect, redshift_config):
+def test_redshift_loader_close(
+    mock_boto3_client, mock_psycopg2_connect, redshift_config
+):
     """
     Test that the close method correctly closes the connection.
     """
@@ -114,7 +118,9 @@ def test_redshift_loader_load_dataframe(
     # Verify COPY command
     mock_cursor.execute.assert_called_once()
     assert "COPY test_table" in mock_cursor.execute.call_args[0][0]
-    assert "s3://test_bucket/tmp/test_table.parquet" in mock_cursor.execute.call_args[0][0]
+    assert (
+        "s3://test_bucket/tmp/test_table.parquet" in mock_cursor.execute.call_args[0][0]
+    )
     assert "IAM_ROLE 'test_iam_role'" in mock_cursor.execute.call_args[0][0]
     # Verify S3 delete
     mock_s3.delete_object.assert_called_once_with(
