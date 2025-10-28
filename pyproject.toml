@@ -8,7 +8,7 @@ readme = "README.md"
 packages = [{include = "py_universal_loader", from = "src"}]
 
 [tool.poetry.dependencies]
-python = ">=3.11"
+python = ">=3.12"
 loguru = "^0.7.2"
 
 [tool.poetry.group.dev.dependencies]
@@ -28,14 +28,16 @@ name = "py_universal_loader"
 version = "0.1.0"
 description = "A unified, high-performance Python package for bulk-loading pandas DataFrames into diverse SQL databases and data warehouses.It provides a single, configuration-driven API that abstracts the most efficient native bulk-loading methods (e.g., `COPY`, `BULK INSERT`) for each backend."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [
     { name = "Gowtham A Rao", email = "gowtham.rao@coreason.ai" },
 ]
 license = { file = "LICENSE" }
 classifiers = [
     "License :: Other/Proprietary License",
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
 ]
 
