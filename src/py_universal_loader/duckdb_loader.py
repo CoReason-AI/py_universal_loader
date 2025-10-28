@@ -56,6 +56,7 @@ class DuckDBLoader(BaseLoader):
 
         # Use INSERT INTO ... SELECT * FROM to load data
         self.connection.execute(
-            f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM temp_df"
+            f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM temp_df WHERE 1=0"
         )
+        self.connection.execute(f"INSERT INTO {table_name} SELECT * FROM temp_df")
         logger.info("Dataframe loaded successfully.")
