@@ -23,7 +23,7 @@ class SQLiteLoader(BaseLoader):
     """
 
     def __init__(self, config: Dict[str, Any]):
-        self.config = config
+        super().__init__(config)
         self.connection = None
 
     def connect(self):
@@ -45,7 +45,7 @@ class SQLiteLoader(BaseLoader):
 
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
         """
-        Execute the entire data ingestion process.
+        Load a DataFrame into a SQLite table using pandas.to_sql().
         """
         if not self.connection:
             raise ConnectionError("Database connection is not established.")
@@ -58,6 +58,18 @@ class SQLiteLoader(BaseLoader):
         if if_exists not in ["replace", "append"]:
             raise ValueError(f"Unsupported if_exists option: {if_exists}")
 
-        logger.info(f"Loading dataframe into table: {table_name}")
-        df.to_sql(table_name, self.connection, if_exists=if_exists, index=False)
-        logger.info("Dataframe loaded successfully.")
+        logger.info(
+            f"Loading dataframe into table: {table_name} with if_exists='{if_exists}'"
+        )
+
+        try:
+            df.to_sql(
+                table_name,
+                self.connection,
+                if_exists=if_exists,
+                index=False,
+            )
+            logger.info("Dataframe loaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to load dataframe: {e}")
+            raise
