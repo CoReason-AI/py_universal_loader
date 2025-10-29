@@ -12,9 +12,9 @@ import os
 import tempfile
 from typing import Any, Dict
 
+import mysql.connector
 import numpy as np
 import pandas as pd
-import mysql.connector
 from loguru import logger
 
 from .base import BaseLoader
@@ -28,35 +28,45 @@ class MySQLLoader(BaseLoader):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.connection = None
+        self._temp_file_path = None
 
     def connect(self):
         """
         Establish and open the database connection.
         """
-        try:
-            self.connection = mysql.connector.connect(
-                host=self.config["host"],
-                port=self.config.get("port", 3306),
-                user=self.config["user"],
-                password=self.config["password"],
-                database=self.config["database"],
-                allow_local_infile=True,
-            )
-        except Exception as e:
-            logger.error(f"Failed to connect to MySQL: {e}")
-            raise
+        conn_info = {
+            "user": self.config.get("user"),
+            "password": self.config.get("password"),
+            "host": self.config.get("host"),
+            "database": self.config.get("database"),
+            "port": self.config.get("port", 3306),
+            "allow_local_infile": True,
+        }
+        logger.info(
+            f"Connecting to MySQL database at: {conn_info['host']}:{conn_info['port']}"
+        )
+        self.connection = mysql.connector.connect(**conn_info)
 
     def close(self):
         """
         Terminate the database connection.
         """
         if self.connection:
+            logger.info("Closing MySQL connection.")
             self.connection.close()
             self.connection = None
 
+    def _cleanup_temp_file(self):
+        """
+        Remove the temporary file if it exists.
+        """
+        if self._temp_file_path and os.path.exists(self._temp_file_path):
+            os.remove(self._temp_file_path)
+            self._temp_file_path = None
+
     def _get_sql_schema(self, df: pd.DataFrame, table_name: str) -> str:
         """
-        Generate a CREATE TABLE statement from a DataFrame.
+        Generate a CREATE TABLE statement from a DataFrame's dtypes.
         """
         type_mapping = {
             np.dtype("int64"): "BIGINT",
@@ -73,11 +83,11 @@ class MySQLLoader(BaseLoader):
             sql_type = type_mapping.get(dtype, "TEXT")
             cols.append(f"`{col_name}` {sql_type}")
 
-        return f"CREATE TABLE IF NOT EXISTS `{table_name}` ({', '.join(cols)});"
+        return f'CREATE TABLE IF NOT EXISTS `{table_name}` ({", ".join(cols)});'
 
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
         """
-        Execute the entire data ingestion process.
+        Load a DataFrame into a MySQL table using LOAD DATA LOCAL INFILE.
         """
         if not self.connection:
             raise ConnectionError("Database connection is not established.")
@@ -86,35 +96,40 @@ class MySQLLoader(BaseLoader):
             logger.info("DataFrame is empty. Skipping load.")
             return
 
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".csv") as tmp:
-            df.to_csv(tmp, index=False, header=False)
-            tmp_path = tmp.name
+        logger.info(f"Loading dataframe into table: {table_name}")
 
-        try:
-            with self.connection.cursor() as cursor:
-                create_table_sql = self._get_sql_schema(df, table_name)
-                cursor.execute(create_table_sql)
+        with self.connection.cursor() as cursor:
+            create_table_sql = self._get_sql_schema(df, table_name)
+            cursor.execute(create_table_sql)
 
-                if_exists = self.config.get("if_exists", "replace")
-                if if_exists == "replace":
-                    logger.info(f"Truncating table {table_name}.")
-                    cursor.execute(f"TRUNCATE TABLE `{table_name}`;")
-                elif if_exists != "append":
-                    raise ValueError(f"Unsupported if_exists option: {if_exists}")
+            if_exists = self.config.get("if_exists", "replace")
+            if if_exists == "replace":
+                logger.info(f"Truncating table {table_name}.")
+                cursor.execute(f"TRUNCATE TABLE `{table_name}`;")
+            elif if_exists != "append":
+                raise ValueError(f"Unsupported if_exists option: {if_exists}")
 
-                cursor.execute(
-                    f"""
-                    LOAD DATA LOCAL INFILE '{tmp_path}'
-                    INTO TABLE `{table_name}`
-                    FIELDS TERMINATED BY ','
-                    LINES TERMINATED BY '\\n'
-                    """
-                )
-            self.connection.commit()
-        except Exception as e:
-            logger.error(f"Failed to load data to MySQL: {e}")
-            if self.connection:
+            with tempfile.NamedTemporaryFile(
+                mode="w+", delete=False, suffix=".csv", encoding="utf-8"
+            ) as temp_f:
+                self._temp_file_path = temp_f.name
+                df.to_csv(self._temp_file_path, index=False, header=False)
+
+            load_sql = f"""
+                LOAD DATA LOCAL INFILE '{self._temp_file_path}'
+                INTO TABLE `{table_name}`
+                FIELDS TERMINATED BY ','
+                ENCLOSED BY '"'
+                LINES TERMINATED BY '\\n'
+            """
+
+            try:
+                cursor.execute(load_sql)
+                self.connection.commit()
+                logger.info("Dataframe loaded successfully.")
+            except Exception as e:
                 self.connection.rollback()
-            raise
-        finally:
-            os.remove(tmp_path)
+                logger.error(f"Failed to load dataframe: {e}")
+                raise
+            finally:
+                self._cleanup_temp_file()
