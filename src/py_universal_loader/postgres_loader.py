@@ -11,10 +11,10 @@
 from io import StringIO
 from typing import Any, Dict
 
+import numpy as np
 import pandas as pd
 import psycopg2
 from loguru import logger
-import numpy as np
 
 from .base import BaseLoader
 
@@ -32,9 +32,17 @@ class PostgresLoader(BaseLoader):
         """
         Establish and open the database connection.
         """
-        conn_str = f"dbname='{self.config['dbname']}' user='{self.config['user']}' host='{self.config['host']}' password='{self.config['password']}'"
-        logger.info(f"Connecting to PostgreSQL database at: {self.config['host']}")
-        self.connection = psycopg2.connect(conn_str)
+        conn_info = {
+            "dbname": self.config.get("dbname"),
+            "user": self.config.get("user"),
+            "password": self.config.get("password"),
+            "host": self.config.get("host"),
+            "port": self.config.get("port", 5432),
+        }
+        logger.info(
+            f"Connecting to PostgreSQL database at: {conn_info['host']}:{conn_info['port']}"
+        )
+        self.connection = psycopg2.connect(**conn_info)
 
     def close(self):
         """
@@ -47,7 +55,7 @@ class PostgresLoader(BaseLoader):
 
     def _get_sql_schema(self, df: pd.DataFrame, table_name: str) -> str:
         """
-        Get the SQL schema for a given DataFrame.
+        Generate a CREATE TABLE statement from a DataFrame.
         """
         type_mapping = {
             np.dtype("int64"): "BIGINT",
@@ -58,42 +66,53 @@ class PostgresLoader(BaseLoader):
             np.dtype("datetime64[ns]"): "TIMESTAMP",
             np.dtype("object"): "TEXT",
         }
-        columns = ", ".join(
-            [f"{col} {type_mapping.get(df[col].dtype, 'TEXT')}" for col in df.columns]
-        )
-        return f"CREATE TABLE IF NOT EXISTS {table_name} ({columns});"
+
+        cols = []
+        for col_name, dtype in df.dtypes.items():
+            sql_type = type_mapping.get(dtype, "TEXT")
+            cols.append(f'"{col_name}" {sql_type}')
+
+        return f'CREATE TABLE IF NOT EXISTS "{table_name}" ({", ".join(cols)});'
 
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
         """
-        Execute the entire data ingestion process.
+        Load a DataFrame into a PostgreSQL table using COPY FROM STDIN.
         """
         if not self.connection:
             raise ConnectionError("Database connection is not established.")
 
+        if df.empty:
+            logger.info("DataFrame is empty. Skipping load.")
+            return
+
         logger.info(f"Loading dataframe into table: {table_name}")
 
-        # Create a string buffer
-        sio = StringIO()
-        sio.write(df.to_csv(index=None, header=False, sep="\t"))
-        sio.seek(0)
-
         with self.connection.cursor() as cursor:
-            # Create table
+            # Create table if it doesn't exist
             create_table_sql = self._get_sql_schema(df, table_name)
             cursor.execute(create_table_sql)
 
+            # Handle if_exists logic
             if_exists = self.config.get("if_exists", "replace")
             if if_exists == "replace":
-                cursor.execute(f"TRUNCATE TABLE {table_name};")
+                logger.info(f"Truncating table {table_name}.")
+                cursor.execute(f'TRUNCATE TABLE "{table_name}";')
             elif if_exists != "append":
                 raise ValueError(f"Unsupported if_exists option: {if_exists}")
 
-            # Use COPY FROM STDIN
-            with sio as f:
-                cursor.copy_expert(
-                    f"COPY {table_name} FROM STDIN WITH CSV HEADER FALSE DELIMITER '\t'",
-                    f,
-                )
+            # Use an in-memory buffer for the CSV data
+            buffer = StringIO()
+            df.to_csv(buffer, index=False, header=False, sep=",")
+            buffer.seek(0)
 
-        self.connection.commit()
-        logger.info("Dataframe loaded successfully.")
+            try:
+                cursor.copy_expert(
+                    sql=f'COPY "{table_name}" FROM STDIN WITH (FORMAT CSV)',
+                    file=buffer,
+                )
+                self.connection.commit()
+                logger.info("Dataframe loaded successfully.")
+            except Exception as e:
+                self.connection.rollback()
+                logger.error(f"Failed to load dataframe: {e}")
+                raise
