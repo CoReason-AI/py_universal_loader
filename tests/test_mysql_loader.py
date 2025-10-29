@@ -85,7 +85,9 @@ def test_mysql_loader_close(mock_connect):
 @patch("mysql.connector.connect")
 @patch("tempfile.NamedTemporaryFile")
 @patch("os.remove")
-def test_mysql_loader_load_dataframe(mock_remove, mock_tmp_file, mock_connect, sample_df):
+def test_mysql_loader_load_dataframe(
+    mock_remove, mock_tmp_file, mock_connect, sample_df
+):
     """
     Test the load_dataframe method.
     """
