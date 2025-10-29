@@ -50,6 +50,14 @@ class SQLiteLoader(BaseLoader):
         if not self.connection:
             raise ConnectionError("Database connection is not established.")
 
+        if df.empty:
+            logger.info("DataFrame is empty. Skipping load.")
+            return
+
+        if_exists = self.config.get("if_exists", "replace")
+        if if_exists not in ["replace", "append"]:
+            raise ValueError(f"Unsupported if_exists option: {if_exists}")
+
         logger.info(f"Loading dataframe into table: {table_name}")
-        df.to_sql(table_name, self.connection, if_exists="replace", index=False)
+        df.to_sql(table_name, self.connection, if_exists=if_exists, index=False)
         logger.info("Dataframe loaded successfully.")
