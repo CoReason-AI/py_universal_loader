@@ -49,6 +49,10 @@ class BigQueryLoader(BaseLoader):
         if not self.client:
             raise ConnectionError("Database connection is not established.")
 
+        if df.empty:
+            logger.info("DataFrame is empty. Skipping load.")
+            return
+
         logger.info(f"Loading dataframe into table: {table_name}")
         job_config = self.config.get("job_config", {})
         job = self.client.load_table_from_dataframe(
