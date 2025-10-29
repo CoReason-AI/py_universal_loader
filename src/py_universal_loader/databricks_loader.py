@@ -50,7 +50,9 @@ class DatabricksLoader(BaseLoader):
             f"PWD={self.config['access_token']}"
         )
         try:
-            logger.info(f"Connecting to Databricks at host: {self.config['server_hostname']}")
+            logger.info(
+                f"Connecting to Databricks at host: {self.config['server_hostname']}"
+            )
             self.connection = pyodbc.connect(conn_str, autocommit=True)
             s3_config = self.config.get("s3", {})
             self.s3_client = boto3.client("s3", **s3_config)
@@ -98,7 +100,9 @@ class DatabricksLoader(BaseLoader):
         Stages a DataFrame to S3 as Parquet and loads it into Databricks using COPY INTO.
         """
         if not self.connection or not self.s3_client:
-            raise ConnectionError("Connection is not established. Call connect() first.")
+            raise ConnectionError(
+                "Connection is not established. Call connect() first."
+            )
 
         if df.empty:
             logger.info("DataFrame is empty. Skipping load.")
@@ -140,7 +144,9 @@ class DatabricksLoader(BaseLoader):
                 logger.info(f"Executing COPY INTO command for table {table_name}.")
                 cursor.execute(copy_sql)
 
-            logger.info(f"Successfully loaded data into {table_name}. Deleting staged S3 file.")
+            logger.info(
+                f"Successfully loaded data into {table_name}. Deleting staged S3 file."
+            )
             self.s3_client.delete_object(Bucket=s3_bucket, Key=s3_key)
         except Exception as e:
             logger.error(

@@ -12,7 +12,6 @@ import unittest
 from unittest.mock import patch, MagicMock
 import pytest
 import pandas as pd
-import pyodbc
 
 from py_universal_loader.databricks_loader import DatabricksLoader
 
@@ -132,7 +131,9 @@ class TestDatabricksLoader(unittest.TestCase):
         self.loader.connection = mock_conn
 
         df = pd.DataFrame({"col1": [1, 2]})
-        with pytest.raises(IOError, match="Failed to load data into Databricks from S3"):
+        with pytest.raises(
+            IOError, match="Failed to load data into Databricks from S3"
+        ):
             self.loader.load_dataframe(df, "test_table")
 
         mock_s3.delete_object.assert_not_called()
