@@ -191,9 +191,7 @@ def test_mysql_loader_load_dataframe_empty(mock_connect, mysql_config):
 
 
 @patch("mysql.connector.connect")
-def test_mysql_loader_load_dataframe_after_close(
-    mock_connect, mysql_config, sample_df
-):
+def test_mysql_loader_load_dataframe_after_close(mock_connect, mysql_config, sample_df):
     """
     Test that load_dataframe raises an error if the connection has been closed.
     """
