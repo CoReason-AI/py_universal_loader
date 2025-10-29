@@ -20,10 +20,14 @@ from .redshift_loader import RedshiftLoader
 from .sqlite_loader import SQLiteLoader
 from .databricks_loader import DatabricksLoader
 from .snowflake_loader import SnowflakeLoader
+from .mysql_loader import MySQLLoader
+from .mssql_loader import MSSQLLoader
 
 # Mapping of db_type to loader class
 LOADER_MAPPING: Dict[str, Type[BaseLoader]] = {
     "sqlite": SQLiteLoader,
+    "mysql": MySQLLoader,
+    "mssql": MSSQLLoader,
     "duckdb": DuckDBLoader,
     "postgres": PostgresLoader,
     "redshift": RedshiftLoader,
