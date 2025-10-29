@@ -94,6 +94,21 @@ def test_bigquery_loader_load_dataframe_no_connection(sample_df):
 
 
 @patch("py_universal_loader.bigquery_loader.bigquery.Client")
+def test_bigquery_loader_load_dataframe_empty(mock_client):
+    """
+    Test that load_dataframe skips execution for an empty DataFrame.
+    """
+    config = {"db_type": "bigquery"}
+    loader = BigQueryLoader(config)
+    loader.connect()
+
+    empty_df = pd.DataFrame({"col1": []})
+    loader.load_dataframe(empty_df, "test_table")
+
+    loader.client.load_table_from_dataframe.assert_not_called()
+
+
+@patch("py_universal_loader.bigquery_loader.bigquery.Client")
 def test_bigquery_loader_load_dataframe_after_close(mock_client, sample_df):
     """
     Test that load_dataframe raises an error if the connection has been closed.
