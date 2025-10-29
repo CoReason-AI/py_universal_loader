@@ -8,7 +8,6 @@
 #
 # Source Code: https://github.com/CoReason-AI/py_universal_loader
 
-from io import StringIO
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -68,13 +67,15 @@ def test_postgres_loader_connect(mock_connect, postgres_config):
     loader = PostgresLoader(postgres_config)
     loader.connect()
 
-    mock_connect.assert_called_once_with(**{
-        "dbname": "testdb",
-        "user": "testuser",
-        "password": "testpassword",
-        "host": "localhost",
-        "port": 5432,
-    })
+    mock_connect.assert_called_once_with(
+        **{
+            "dbname": "testdb",
+            "user": "testuser",
+            "password": "testpassword",
+            "host": "localhost",
+            "port": 5432,
+        }
+    )
     assert loader.connection == mock_connection
 
 
@@ -142,9 +143,7 @@ def test_postgres_loader_load_dataframe_append(
 
 
 @patch("psycopg2.connect")
-def test_postgres_loader_load_dataframe_empty(
-    mock_connect, postgres_config
-):
+def test_postgres_loader_load_dataframe_empty(mock_connect, postgres_config):
     """
     Test that load_dataframe skips execution for an empty DataFrame.
     """

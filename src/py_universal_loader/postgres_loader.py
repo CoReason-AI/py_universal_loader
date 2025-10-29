@@ -39,7 +39,9 @@ class PostgresLoader(BaseLoader):
             "host": self.config.get("host"),
             "port": self.config.get("port", 5432),
         }
-        logger.info(f"Connecting to PostgreSQL database at: {conn_info['host']}:{conn_info['port']}")
+        logger.info(
+            f"Connecting to PostgreSQL database at: {conn_info['host']}:{conn_info['port']}"
+        )
         self.connection = psycopg2.connect(**conn_info)
 
     def close(self):
@@ -100,7 +102,7 @@ class PostgresLoader(BaseLoader):
 
             # Use an in-memory buffer for the CSV data
             buffer = StringIO()
-            df.to_csv(buffer, index=False, header=False, sep=',')
+            df.to_csv(buffer, index=False, header=False, sep=",")
             buffer.seek(0)
 
             try:
