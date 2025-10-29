@@ -50,13 +50,34 @@ class DuckDBLoader(BaseLoader):
         if not self.connection:
             raise ConnectionError("Database connection is not established.")
 
-        logger.info(f"Loading dataframe into table: {table_name}")
-        # Register the DataFrame as a virtual table
-        self.connection.register("temp_df", df)
+        if df.empty:
+            logger.info("DataFrame is empty. Skipping load.")
+            return
+
+        if_exists = self.config.get("if_exists", "replace")
+        if if_exists not in ["replace", "append"]:
+            raise ValueError(f"Unsupported if_exists option: {if_exists}")
+
+        logger.info(
+            f"Loading dataframe into table: {table_name} with if_exists='{if_exists}'"
+        )
+
+        # Register the DataFrame as a virtual table to leverage DuckDB's performance
+        self.connection.register("temp_df_view", df)
+
+        # Ensure the target table exists with the correct schema
+        self.connection.execute(
+            f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM temp_df_view WHERE 1=0"
+        )
+
+        if if_exists == "replace":
+            logger.info(f"Truncating table {table_name}.")
+            self.connection.execute(f"TRUNCATE TABLE {table_name}")
 
         # Use INSERT INTO ... SELECT * FROM to load data
-        self.connection.execute(
-            f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM temp_df WHERE 1=0"
-        )
-        self.connection.execute(f"INSERT INTO {table_name} SELECT * FROM temp_df")
+        self.connection.execute(f"INSERT INTO {table_name} SELECT * FROM temp_df_view")
+
+        # Unregister the virtual table to clean up
+        self.connection.unregister("temp_df_view")
+
         logger.info("Dataframe loaded successfully.")

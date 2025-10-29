@@ -89,18 +89,20 @@ def test_duckdb_loader_load_dataframe(sample_df: pd.DataFrame):
 
 def test_duckdb_loader_load_dataframe_empty():
     """
-    Test the load_dataframe method with an empty DataFrame.
+    Test that load_dataframe skips execution for an empty DataFrame.
     """
+    table_name = "test_table_empty"
     config = {"db_type": "duckdb", "db_path": ":memory:"}
     loader = DuckDBLoader(config)
     loader.connect()
     empty_df = pd.DataFrame({"col1": [], "col2": []})
-    loader.load_dataframe(empty_df, "test_table_empty")
+    loader.load_dataframe(empty_df, table_name)
 
-    # Verify the table is empty
+    # Verify the table was not created because the dataframe was empty
     assert loader.connection is not None
-    result_df = loader.connection.execute("SELECT * FROM test_table_empty").fetchdf()
-    assert result_df.empty
+    with pytest.raises(duckdb.CatalogException):
+        loader.connection.execute(f"SELECT * FROM {table_name}").fetchdf()
+
     loader.close()
 
 
@@ -116,24 +118,47 @@ def test_duckdb_loader_load_dataframe_no_connection(sample_df: pd.DataFrame):
         loader.load_dataframe(sample_df, "test_table")
 
 
+def test_duckdb_loader_load_dataframe_replace(sample_df: pd.DataFrame):
+    """
+    Test the load_dataframe method with if_exists='replace'.
+    """
+    table_name = "test_replace_table"
+    config = {"db_type": "duckdb", "db_path": ":memory:", "if_exists": "replace"}
+    loader = DuckDBLoader(config)
+    loader.connect()
+
+    # First load
+    loader.load_dataframe(sample_df, table_name)
+
+    # Second load with different data, should replace the first
+    df_new = pd.DataFrame({"col1": [3, 4], "col2": ["C", "D"]})
+    loader.load_dataframe(df_new, table_name)
+
+    assert loader.connection is not None
+    result_df = loader.connection.execute(f"SELECT * FROM {table_name}").fetchdf()
+    pd.testing.assert_frame_equal(result_df, df_new)
+    loader.close()
+
+
 def test_duckdb_loader_load_dataframe_append(sample_df: pd.DataFrame):
     """
-    Test that loading a DataFrame appends to an existing table.
+    Test the load_dataframe method with if_exists='append'.
     """
-    config = {"db_type": "duckdb", "db_path": ":memory:"}
+    table_name = "test_append_table"
+    config = {"db_type": "duckdb", "db_path": ":memory:", "if_exists": "append"}
     loader = DuckDBLoader(config)
     loader.connect()
 
     # Load the first DataFrame
-    loader.load_dataframe(sample_df, "test_append_table")
+    loader.load_dataframe(sample_df, table_name)
 
     # Load a second DataFrame to append
     append_df = pd.DataFrame({"col1": [3, 4], "col2": ["C", "D"]})
-    loader.load_dataframe(append_df, "test_append_table")
+    loader.load_dataframe(append_df, table_name)
 
     # Verify the data was appended correctly
     assert loader.connection is not None
-    result_df = loader.connection.execute("SELECT * FROM test_append_table").fetchdf()
+    result_df = loader.connection.execute(f"SELECT * FROM {table_name}").fetchdf()
 
     expected_df = pd.concat([sample_df, append_df], ignore_index=True)
     pd.testing.assert_frame_equal(result_df, expected_df)
