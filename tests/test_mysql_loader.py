@@ -110,11 +110,13 @@ def test_mysql_loader_load_dataframe_replace(
     loader.connect()
     loader.load_dataframe(sample_df, "test_table")
 
-    expected_schema = 'CREATE TABLE IF NOT EXISTS `test_table` (`col_int` BIGINT, `col_float` DOUBLE, `col_bool` BOOLEAN, `col_str` TEXT, `col_date` DATETIME);'
+    expected_schema = "CREATE TABLE IF NOT EXISTS `test_table` (`col_int` BIGINT, `col_float` DOUBLE, `col_bool` BOOLEAN, `col_str` TEXT, `col_date` DATETIME);"
     mock_cursor.execute.assert_any_call(expected_schema)
-    mock_cursor.execute.assert_any_call('TRUNCATE TABLE `test_table`;')
+    mock_cursor.execute.assert_any_call("TRUNCATE TABLE `test_table`;")
 
-    load_data_call = [c for c in mock_cursor.execute.call_args_list if "LOAD DATA" in c[0][0]][0]
+    load_data_call = [
+        c for c in mock_cursor.execute.call_args_list if "LOAD DATA" in c[0][0]
+    ][0]
     assert "LOAD DATA LOCAL INFILE 'dummy_path.csv'" in load_data_call[0][0]
     assert "INTO TABLE `test_table`" in load_data_call[0][0]
 
@@ -143,13 +145,15 @@ def test_mysql_loader_load_dataframe_append(
     loader.connect()
     loader.load_dataframe(sample_df, "test_table")
 
-    expected_schema = 'CREATE TABLE IF NOT EXISTS `test_table` (`col_int` BIGINT, `col_float` DOUBLE, `col_bool` BOOLEAN, `col_str` TEXT, `col_date` DATETIME);'
+    expected_schema = "CREATE TABLE IF NOT EXISTS `test_table` (`col_int` BIGINT, `col_float` DOUBLE, `col_bool` BOOLEAN, `col_str` TEXT, `col_date` DATETIME);"
     mock_cursor.execute.assert_any_call(expected_schema)
 
     for a_call in mock_cursor.execute.call_args_list:
         assert "TRUNCATE TABLE" not in a_call[0][0]
 
-    load_data_call = [c for c in mock_cursor.execute.call_args_list if "LOAD DATA" in c[0][0]][0]
+    load_data_call = [
+        c for c in mock_cursor.execute.call_args_list if "LOAD DATA" in c[0][0]
+    ][0]
     assert "LOAD DATA LOCAL INFILE 'dummy_path.csv'" in load_data_call[0][0]
     assert "INTO TABLE `test_table`" in load_data_call[0][0]
 

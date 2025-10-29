@@ -71,9 +71,9 @@ class MySQLLoader(BaseLoader):
         cols = []
         for col_name, dtype in df.dtypes.items():
             sql_type = type_mapping.get(dtype, "TEXT")
-            cols.append(f'`{col_name}` {sql_type}')
+            cols.append(f"`{col_name}` {sql_type}")
 
-        return f'CREATE TABLE IF NOT EXISTS `{table_name}` ({", ".join(cols)});'
+        return f"CREATE TABLE IF NOT EXISTS `{table_name}` ({', '.join(cols)});"
 
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
         """
@@ -98,7 +98,7 @@ class MySQLLoader(BaseLoader):
                 if_exists = self.config.get("if_exists", "replace")
                 if if_exists == "replace":
                     logger.info(f"Truncating table {table_name}.")
-                    cursor.execute(f'TRUNCATE TABLE `{table_name}`;')
+                    cursor.execute(f"TRUNCATE TABLE `{table_name}`;")
                 elif if_exists != "append":
                     raise ValueError(f"Unsupported if_exists option: {if_exists}")
 
