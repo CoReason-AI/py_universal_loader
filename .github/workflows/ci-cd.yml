@@ -57,6 +57,11 @@ jobs:
         run: pipx install poetry
         shell: bash
 
+      - name: Install unixodbc on macOS
+        if: runner.os == 'macOS'
+        run: brew install unixodbc
+        shell: bash
+
       - name: Install dependencies
         run: poetry install --with dev
         shell: bash
