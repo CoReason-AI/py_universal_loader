@@ -46,7 +46,9 @@ def test_get_loader_redshift(redshift_config):
 
 @patch("boto3.client")
 @patch("psycopg2.connect")
-def test_redshift_loader_connect(mock_psycopg2_connect, mock_boto3_client, redshift_config):
+def test_redshift_loader_connect(
+    mock_psycopg2_connect, mock_boto3_client, redshift_config
+):
     """Test the connect method establishes both Redshift and S3 connections."""
     mock_psycopg2_connect.return_value = MagicMock()
     mock_boto3_client.return_value = MagicMock()
@@ -69,7 +71,9 @@ def test_redshift_loader_connect(mock_psycopg2_connect, mock_boto3_client, redsh
 
 @patch("boto3.client")
 @patch("psycopg2.connect")
-def test_redshift_loader_close(mock_psycopg2_connect, mock_boto3_client, redshift_config):
+def test_redshift_loader_close(
+    mock_psycopg2_connect, mock_boto3_client, redshift_config
+):
     """Test that the close method correctly terminates the connection."""
     mock_conn = MagicMock()
     mock_psycopg2_connect.return_value = mock_conn

@@ -95,7 +95,9 @@ class RedshiftLoader(BaseLoader):
         COPY operation.
         """
         if not self.connection or not self.s3_client:
-            raise ConnectionError("Connection is not established. Call connect() first.")
+            raise ConnectionError(
+                "Connection is not established. Call connect() first."
+            )
 
         if df.empty:
             logger.info("DataFrame is empty. Skipping load.")
@@ -149,7 +151,10 @@ class RedshiftLoader(BaseLoader):
             self.s3_client.delete_object(Bucket=s3_bucket, Key=s3_key)
 
         except Exception as e:
-            logger.error(f"Failed to load data into Redshift. Staged file remains in S3: {s3_path}", exc_info=True)
+            logger.error(
+                f"Failed to load data into Redshift. Staged file remains in S3: {s3_path}",
+                exc_info=True,
+            )
             if self.connection:
                 self.connection.rollback()
             raise IOError("Failed to load data into Redshift from S3") from e
