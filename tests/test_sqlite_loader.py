@@ -61,7 +61,9 @@ def test_sqlite_loader_close(sqlite_config):
     connection = loader.connection
     loader.close()
     assert loader.connection is None
-    with pytest.raises(sqlite3.ProgrammingError, match="Cannot operate on a closed database."):
+    with pytest.raises(
+        sqlite3.ProgrammingError, match="Cannot operate on a closed database."
+    ):
         connection.execute("SELECT 1")
 
 
@@ -135,7 +137,9 @@ def test_sqlite_loader_load_dataframe_no_connection(sqlite_config, sample_df):
     Test that load_dataframe raises a ConnectionError if connect has not been called.
     """
     loader = SQLiteLoader(sqlite_config)
-    with pytest.raises(ConnectionError, match="Database connection is not established."):
+    with pytest.raises(
+        ConnectionError, match="Database connection is not established."
+    ):
         loader.load_dataframe(sample_df, "test_table")
 
 
@@ -147,5 +151,7 @@ def test_sqlite_loader_load_dataframe_after_close(sqlite_config, sample_df):
     loader.connect()
     loader.close()
 
-    with pytest.raises(ConnectionError, match="Database connection is not established."):
+    with pytest.raises(
+        ConnectionError, match="Database connection is not established."
+    ):
         loader.load_dataframe(sample_df, "test_table")
