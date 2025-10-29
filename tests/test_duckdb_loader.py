@@ -116,6 +116,31 @@ def test_duckdb_loader_load_dataframe_no_connection(sample_df: pd.DataFrame):
         loader.load_dataframe(sample_df, "test_table")
 
 
+def test_duckdb_loader_load_dataframe_append(sample_df: pd.DataFrame):
+    """
+    Test that loading a DataFrame appends to an existing table.
+    """
+    config = {"db_type": "duckdb", "db_path": ":memory:"}
+    loader = DuckDBLoader(config)
+    loader.connect()
+
+    # Load the first DataFrame
+    loader.load_dataframe(sample_df, "test_append_table")
+
+    # Load a second DataFrame to append
+    append_df = pd.DataFrame({"col1": [3, 4], "col2": ["C", "D"]})
+    loader.load_dataframe(append_df, "test_append_table")
+
+    # Verify the data was appended correctly
+    assert loader.connection is not None
+    result_df = loader.connection.execute("SELECT * FROM test_append_table").fetchdf()
+
+    expected_df = pd.concat([sample_df, append_df], ignore_index=True)
+    pd.testing.assert_frame_equal(result_df, expected_df)
+
+    loader.close()
+
+
 def test_duckdb_loader_load_dataframe_after_close(sample_df: pd.DataFrame):
     """
     Test that load_dataframe raises an error if the connection has been closed.
