@@ -170,3 +170,69 @@ def test_mysql_loader_load_dataframe_no_connection(mysql_config, sample_df):
         ConnectionError, match="Database connection is not established."
     ):
         loader.load_dataframe(sample_df, "test_table")
+
+
+@patch("mysql.connector.connect")
+def test_mysql_loader_load_dataframe_empty(mock_connect, mysql_config):
+    """
+    Test that load_dataframe skips execution for an empty DataFrame.
+    """
+    mock_connection = MagicMock()
+    mock_cursor = MagicMock()
+    mock_connect.return_value = mock_connection
+    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+
+    loader = MySQLLoader(mysql_config)
+    loader.connect()
+    empty_df = pd.DataFrame()
+    loader.load_dataframe(empty_df, "test_table")
+
+    mock_cursor.execute.assert_not_called()
+
+
+@patch("mysql.connector.connect")
+def test_mysql_loader_load_dataframe_after_close(
+    mock_connect, mysql_config, sample_df
+):
+    """
+    Test that load_dataframe raises an error if the connection has been closed.
+    """
+    mock_connection = MagicMock()
+    mock_connect.return_value = mock_connection
+
+    loader = MySQLLoader(mysql_config)
+    loader.connect()
+    loader.close()
+
+    with pytest.raises(
+        ConnectionError, match="Database connection is not established."
+    ):
+        loader.load_dataframe(sample_df, "test_table")
+
+
+@patch("mysql.connector.connect")
+@patch("tempfile.NamedTemporaryFile")
+@patch("os.remove")
+def test_mysql_loader_load_dataframe_exception_rollbacks(
+    mock_remove, mock_tmp_file, mock_connect, mysql_config, sample_df
+):
+    """
+    Test that the connection is rolled back if an exception occurs.
+    """
+    mock_connection = MagicMock()
+    mock_cursor = MagicMock()
+    mock_connect.return_value = mock_connection
+    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_cursor.execute.side_effect = Exception("Test exception")
+
+    mock_tmp_file.return_value.__enter__.return_value.name = "dummy_path.csv"
+
+    loader = MySQLLoader(mysql_config)
+    loader.connect()
+
+    with pytest.raises(Exception, match="Test exception"):
+        loader.load_dataframe(sample_df, "test_table")
+
+    mock_connection.rollback.assert_called_once()
+    mock_connection.commit.assert_not_called()
+    mock_remove.assert_called_once_with("dummy_path.csv")
