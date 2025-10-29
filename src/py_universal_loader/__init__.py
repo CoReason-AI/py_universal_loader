@@ -1,4 +1,4 @@
-# Copyright (c) 2025 CoReason, Inc.
+# Copyright (c) 2025 CoReason, Inc
 #
 # This software is proprietary and dual-licensed.
 # Licensed under the Prosperity Public License 3.0 (the "License").
@@ -6,7 +6,7 @@
 # For details, see the LICENSE file.
 # Commercial use beyond a 30-day trial requires a separate license.
 #
-# Source Code: https://github.com/CoReason-AI/py_universal_loader
+# Source Code: https://github.com/CoReason-AI/py_parquet_forget
 
 """
 A unified, high-performance Python package for bulk-loading pandas DataFrames into diverse SQL databases and data warehouses.It provides a single, configuration-driven API that abstracts the most efficient native bulk-loading methods (e.g., `COPY`, `BULK INSERT`) for each backend.
@@ -15,7 +15,3 @@ A unified, high-performance Python package for bulk-loading pandas DataFrames in
 __version__ = "0.1.0"
 __author__ = "Gowtham A Rao"
 __email__ = "gowtham.rao@coreason.ai"
-
-from .main import hello_world
-
-__all__ = ["hello_world"]
