@@ -12,6 +12,7 @@ import os
 import tempfile
 from typing import Any, Dict
 
+import numpy as np
 import pandas as pd
 import mysql.connector
 from loguru import logger
@@ -53,6 +54,27 @@ class MySQLLoader(BaseLoader):
             self.connection.close()
             self.connection = None
 
+    def _get_sql_schema(self, df: pd.DataFrame, table_name: str) -> str:
+        """
+        Generate a CREATE TABLE statement from a DataFrame.
+        """
+        type_mapping = {
+            np.dtype("int64"): "BIGINT",
+            np.dtype("int32"): "INTEGER",
+            np.dtype("float64"): "DOUBLE",
+            np.dtype("float32"): "FLOAT",
+            np.dtype("bool"): "BOOLEAN",
+            np.dtype("datetime64[ns]"): "DATETIME",
+            np.dtype("object"): "TEXT",
+        }
+
+        cols = []
+        for col_name, dtype in df.dtypes.items():
+            sql_type = type_mapping.get(dtype, "TEXT")
+            cols.append(f"`{col_name}` {sql_type}")
+
+        return f"CREATE TABLE IF NOT EXISTS `{table_name}` ({', '.join(cols)});"
+
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
         """
         Execute the entire data ingestion process.
@@ -60,17 +82,30 @@ class MySQLLoader(BaseLoader):
         if not self.connection:
             raise ConnectionError("Database connection is not established.")
 
+        if df.empty:
+            logger.info("DataFrame is empty. Skipping load.")
+            return
+
         with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".csv") as tmp:
             df.to_csv(tmp, index=False, header=False)
             tmp_path = tmp.name
 
         try:
             with self.connection.cursor() as cursor:
-                # Assuming the table already exists
+                create_table_sql = self._get_sql_schema(df, table_name)
+                cursor.execute(create_table_sql)
+
+                if_exists = self.config.get("if_exists", "replace")
+                if if_exists == "replace":
+                    logger.info(f"Truncating table {table_name}.")
+                    cursor.execute(f"TRUNCATE TABLE `{table_name}`;")
+                elif if_exists != "append":
+                    raise ValueError(f"Unsupported if_exists option: {if_exists}")
+
                 cursor.execute(
                     f"""
                     LOAD DATA LOCAL INFILE '{tmp_path}'
-                    INTO TABLE {table_name}
+                    INTO TABLE `{table_name}`
                     FIELDS TERMINATED BY ','
                     LINES TERMINATED BY '\\n'
                     """
