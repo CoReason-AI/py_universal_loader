@@ -6,7 +6,7 @@
 # For details, see the LICENSE file.
 # Commercial use beyond a 30-day trial requires a separate license.
 #
-# Source Code: https://github.com/CoReason-AI/py_parquet_forget
+# Source Code: https://github.com/CoReason-AI/py_universal_loader
 
 import unittest
 from unittest.mock import MagicMock, patch
