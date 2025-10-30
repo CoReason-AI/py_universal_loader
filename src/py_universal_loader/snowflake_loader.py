@@ -148,7 +148,7 @@ class SnowflakeLoader(BaseLoader):
                 f"Successfully loaded data into {table_name}. Deleting staged S3 file."
             )
             self.s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
-        except Exception as e:
+        except Exception:
             logger.error(
                 f"Failed to load data into Snowflake. Staged file remains in S3: {s3_path}",
                 exc_info=True,
