@@ -30,21 +30,22 @@ class BigQueryLoader(BaseLoader):
         """
         Establish and open the database connection.
         """
-        logger.info("Connecting to BigQuery.")
-        self.client = bigquery.Client()
+        project_id = self.config.get("project_id")
+        logger.info(f"Connecting to BigQuery project: {project_id}")
+        self.client = bigquery.Client(project=project_id)
 
     def close(self):
         """
         Terminate the database connection.
         """
         if self.client:
-            logger.info("Closing BigQuery connection.")
+            logger.info("Closing BigQuery client.")
             self.client.close()
             self.client = None
 
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
         """
-        Execute the entire data ingestion process.
+        Load a DataFrame into a BigQuery table using load_table_from_dataframe().
         """
         if not self.client:
             raise ConnectionError("Database connection is not established.")
@@ -53,22 +54,30 @@ class BigQueryLoader(BaseLoader):
             logger.info("DataFrame is empty. Skipping load.")
             return
 
-        logger.info(f"Loading dataframe into table: {table_name}")
+        if_exists = self.config.get("if_exists", "replace")
+        if if_exists not in ["replace", "append"]:
+            raise ValueError(f"Unsupported if_exists option: {if_exists}")
+
+        logger.info(
+            f"Loading dataframe into table: {table_name} with if_exists='{if_exists}'"
+        )
+
+        table_id = f"{self.config.get('dataset_id')}.{table_name}"
+
         job_config = bigquery.LoadJobConfig()
-
-        if_exists = self.config.get("if_exists", "append")
-
         if if_exists == "replace":
             job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-        elif if_exists == "append":
-            job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
         else:
-            raise ValueError(
-                f"Invalid value for if_exists: {if_exists}. "
-                "Allowed values are 'replace' and 'append'."
+            job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
+
+        job_config.autodetect = True
+
+        try:
+            job = self.client.load_table_from_dataframe(
+                df, table_id, job_config=job_config
             )
-        job = self.client.load_table_from_dataframe(
-            df, table_name, job_config=job_config
-        )
-        job.result()
-        logger.info("Dataframe loaded successfully.")
+            job.result()
+            logger.info(f"Loaded {job.output_rows} rows into {table_id}.")
+        except Exception as e:
+            logger.error(f"Failed to load dataframe to BigQuery: {e}")
+            raise
