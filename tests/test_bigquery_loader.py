@@ -92,9 +92,7 @@ def test_bigquery_loader_load_dataframe(mock_client, bq_config, sample_df):
     pd.testing.assert_frame_equal(args[0], sample_df)
     assert args[1] == "test_dataset.test_replace"
     job_config = kwargs["job_config"]
-    assert (
-        job_config.write_disposition == bigquery.WriteDisposition.WRITE_TRUNCATE
-    )
+    assert job_config.write_disposition == bigquery.WriteDisposition.WRITE_TRUNCATE
     mock_job.result.assert_called_once()
     loader.close()
 
@@ -151,8 +149,8 @@ def test_bigquery_loader_api_error(mock_client, bq_config, sample_df):
     loader = BigQueryLoader(bq_config)
     loader.connect()
 
-    loader.client.load_table_from_dataframe.side_effect = (
-        google_exceptions.NotFound("Dataset not found")
+    loader.client.load_table_from_dataframe.side_effect = google_exceptions.NotFound(
+        "Dataset not found"
     )
 
     with pytest.raises(google_exceptions.NotFound):
