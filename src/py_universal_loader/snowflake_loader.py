@@ -141,20 +141,18 @@ class SnowflakeLoader(BaseLoader):
                     FILE_FORMAT = (TYPE = PARQUET);
                 """
                 cursor.execute(copy_sql)
-            self.connection.commit()
-            logger.info(f"Successfully loaded data into {table_name}")
 
+            # If COPY is successful, commit and then delete S3 object
+            self.connection.commit()
+            logger.info(
+                f"Successfully loaded data into {table_name}. Deleting staged S3 file."
+            )
+            self.s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
         except Exception as e:
-            logger.error(f"Failed to load data to Snowflake: {e}")
+            logger.error(
+                f"Failed to load data into Snowflake. Staged file remains in S3: {s3_path}",
+                exc_info=True,
+            )
             if self.connection:
                 self.connection.rollback()
             raise
-        finally:
-            # Delete temporary file from S3
-            try:
-                logger.info(f"Deleting temporary S3 file: {s3_path}")
-                self.s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
-            except Exception as e:
-                logger.warning(
-                    f"Failed to delete temporary file from S3: {s3_path}. Error: {e}"
-                )
