@@ -77,7 +77,9 @@ class DuckDBLoader(BaseLoader):
                     f'CREATE TABLE IF NOT EXISTS "{table_name}" AS SELECT * FROM {view_name} WHERE 1=0'
                 )
 
-            self.connection.execute(f'INSERT INTO "{table_name}" SELECT * FROM {view_name}')
+            self.connection.execute(
+                f'INSERT INTO "{table_name}" SELECT * FROM {view_name}'
+            )
 
         finally:
             self.connection.unregister(view_name)
