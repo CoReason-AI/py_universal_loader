@@ -66,7 +66,9 @@ class RedshiftLoader(BaseLoader):
             self.connection.close()
             self.connection = None
 
-    def _get_sql_schema(self, df: pd.DataFrame, table_name: str) -> str:
+    def _get_create_table_sql(
+        self, df: pd.DataFrame, table_name: str, if_not_exists: bool = False
+    ) -> str:
         """
         Generate a CREATE TABLE statement from a DataFrame for Redshift.
         """
@@ -85,7 +87,10 @@ class RedshiftLoader(BaseLoader):
             sql_type = type_mapping.get(dtype, "VARCHAR(65535)")
             cols.append(f'"{col_name}" {sql_type}')
 
-        return f'CREATE TABLE IF NOT EXISTS "{table_name}" ({", ".join(cols)});'
+        create_clause = (
+            "CREATE TABLE IF NOT EXISTS" if if_not_exists else "CREATE TABLE"
+        )
+        return f'{create_clause} "{table_name}" ({", ".join(cols)});'
 
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
         """
@@ -102,6 +107,14 @@ class RedshiftLoader(BaseLoader):
         if df.empty:
             logger.info("DataFrame is empty. Skipping load.")
             return
+
+        if_exists = self.config.get("if_exists", "replace")
+        if if_exists not in ["replace", "append"]:
+            raise ValueError(f"Unsupported if_exists option: {if_exists}")
+
+        logger.info(
+            f"Loading dataframe into table: {table_name} with if_exists='{if_exists}'"
+        )
 
         s3_bucket = self.config.get("s3_bucket")
         if not s3_bucket:
@@ -125,9 +138,17 @@ class RedshiftLoader(BaseLoader):
 
         try:
             with self.connection.cursor() as cursor:
-                # Create table schema if it doesn't exist
-                create_table_sql = self._get_sql_schema(df, table_name)
-                cursor.execute(create_table_sql)
+                if if_exists == "replace":
+                    logger.info(f"Dropping table {table_name} if it exists.")
+                    cursor.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+                    create_table_sql = self._get_create_table_sql(df, table_name)
+                    cursor.execute(create_table_sql)
+                elif if_exists == "append":
+                    # Ensure table exists for append
+                    create_table_sql = self._get_create_table_sql(
+                        df, table_name, if_not_exists=True
+                    )
+                    cursor.execute(create_table_sql)
 
                 # Build and execute the COPY command
                 iam_role_arn = self.config.get("iam_role_arn")
