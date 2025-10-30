@@ -47,7 +47,9 @@ def test_get_loader_snowflake(snowflake_config):
 
 @patch("boto3.client")
 @patch("snowflake.connector.connect")
-def test_snowflake_loader_connect(mock_snowflake_connect, mock_boto3_client, snowflake_config):
+def test_snowflake_loader_connect(
+    mock_snowflake_connect, mock_boto3_client, snowflake_config
+):
     """Test the connect method establishes both Snowflake and S3 connections."""
     mock_snowflake_connect.return_value = MagicMock()
     mock_boto3_client.return_value = MagicMock()
@@ -71,7 +73,9 @@ def test_snowflake_loader_connect(mock_snowflake_connect, mock_boto3_client, sno
 
 @patch("boto3.client")
 @patch("snowflake.connector.connect")
-def test_snowflake_loader_close(mock_snowflake_connect, mock_boto3_client, snowflake_config):
+def test_snowflake_loader_close(
+    mock_snowflake_connect, mock_boto3_client, snowflake_config
+):
     """Test that the close method correctly terminates the connection."""
     mock_conn = MagicMock()
     mock_snowflake_connect.return_value = mock_conn
@@ -111,5 +115,7 @@ def test_snowflake_loader_load_dataframe(
 def test_snowflake_loader_load_dataframe_no_connection(snowflake_config, sample_df):
     """Test that load_dataframe raises ConnectionError if not connected."""
     loader = SnowflakeLoader(snowflake_config)
-    with pytest.raises(ConnectionError, match="Database connection is not established."):
+    with pytest.raises(
+        ConnectionError, match="Database connection is not established."
+    ):
         loader.load_dataframe(sample_df, "test_table")
