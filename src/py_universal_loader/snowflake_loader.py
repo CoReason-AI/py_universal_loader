@@ -76,7 +76,7 @@ class SnowflakeLoader(BaseLoader):
                 iam_role_arn = self.config.get("iam_role_arn", "")
                 copy_sql = f"""
                     COPY INTO {table_name}
-                    FROM '@{s3_path}'
+                    FROM '{s3_path}'
                     credentials=(aws_role='{iam_role_arn}')
                     file_format = (type = parquet);
                 """
