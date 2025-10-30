@@ -169,3 +169,53 @@ def test_snowflake_loader_load_dataframe_no_connection(snowflake_config, sample_
         ConnectionError, match="Database connection is not established."
     ):
         loader.load_dataframe(sample_df, "test_table")
+
+
+@patch("boto3.client")
+@patch("snowflake.connector.connect")
+def test_snowflake_loader_copy_fails(
+    mock_snowflake_connect, mock_boto3_client, snowflake_config, sample_df
+):
+    """Test that the S3 object is NOT deleted if the COPY command fails."""
+    mock_s3 = MagicMock()
+    mock_boto3_client.return_value = mock_s3
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    # Simulate a failure on the COPY command
+    mock_cursor.execute.side_effect = [
+        None,
+        None,
+        Exception("Snowflake COPY Error"),
+    ]
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_snowflake_connect.return_value = mock_conn
+
+    loader = SnowflakeLoader(snowflake_config)
+    loader.connect()
+
+    with pytest.raises(Exception, match="Snowflake COPY Error"):
+        loader.load_dataframe(sample_df, "test_table")
+
+    mock_conn.rollback.assert_called_once()
+    mock_s3.delete_object.assert_not_called()  # Crucial check
+
+
+@patch("boto3.client")
+@patch("snowflake.connector.connect")
+def test_snowflake_loader_load_dataframe_empty(
+    mock_snowflake_connect, mock_boto3_client, snowflake_config
+):
+    """Test that load_dataframe skips execution for an empty DataFrame."""
+    mock_s3 = MagicMock()
+    mock_boto3_client.return_value = mock_s3
+    mock_conn = MagicMock()
+    mock_snowflake_connect.return_value = mock_conn
+
+    loader = SnowflakeLoader(snowflake_config)
+    loader.connect()
+
+    empty_df = pd.DataFrame({"col1": []})
+    loader.load_dataframe(empty_df, "test_table")
+
+    mock_s3.upload_fileobj.assert_not_called()
+    mock_conn.cursor.assert_not_called()
