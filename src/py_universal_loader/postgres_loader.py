@@ -8,9 +8,10 @@
 #
 # Source Code: https://github.com/CoReason-AI/py_universal_loader
 
-import io
+from io import StringIO
 from typing import Any, Dict
 
+import numpy as np
 import pandas as pd
 import psycopg2
 from loguru import logger
@@ -24,20 +25,24 @@ class PostgresLoader(BaseLoader):
     """
 
     def __init__(self, config: Dict[str, Any]):
-        super().__init__(config)
+        self.config = config
         self.connection = None
 
     def connect(self):
         """
         Establish and open the database connection.
         """
-        conn_str = (
-            f"dbname='{self.config['db']}' user='{self.config['user']}' "
-            f"host='{self.config['host']}' password='{self.config['password']}' "
-            f"port='{self.config.get('port', 5432)}'"
+        conn_info = {
+            "dbname": self.config.get("dbname"),
+            "user": self.config.get("user"),
+            "password": self.config.get("password"),
+            "host": self.config.get("host"),
+            "port": self.config.get("port", 5432),
+        }
+        logger.info(
+            f"Connecting to PostgreSQL database at: {conn_info['host']}:{conn_info['port']}"
         )
-        logger.info(f"Connecting to PostgreSQL database at: {self.config['host']}")
-        self.connection = psycopg2.connect(conn_str)
+        self.connection = psycopg2.connect(**conn_info)
 
     def close(self):
         """
@@ -47,6 +52,27 @@ class PostgresLoader(BaseLoader):
             logger.info("Closing PostgreSQL connection.")
             self.connection.close()
             self.connection = None
+
+    def _get_sql_schema(self, df: pd.DataFrame, table_name: str) -> str:
+        """
+        Generate a CREATE TABLE statement from a DataFrame.
+        """
+        type_mapping = {
+            np.dtype("int64"): "BIGINT",
+            np.dtype("int32"): "INTEGER",
+            np.dtype("float64"): "DOUBLE PRECISION",
+            np.dtype("float32"): "REAL",
+            np.dtype("bool"): "BOOLEAN",
+            np.dtype("datetime64[ns]"): "TIMESTAMP",
+            np.dtype("object"): "TEXT",
+        }
+
+        cols = []
+        for col_name, dtype in df.dtypes.items():
+            sql_type = type_mapping.get(dtype, "TEXT")
+            cols.append(f'"{col_name}" {sql_type}')
+
+        return f'CREATE TABLE IF NOT EXISTS "{table_name}" ({", ".join(cols)});'
 
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
         """
@@ -59,64 +85,34 @@ class PostgresLoader(BaseLoader):
             logger.info("DataFrame is empty. Skipping load.")
             return
 
-        if_exists = self.config.get("if_exists", "replace")
-        if if_exists not in ["replace", "append"]:
-            raise ValueError(f"Unsupported if_exists option: {if_exists}")
-
-        logger.info(
-            f"Loading dataframe into table: {table_name} with if_exists='{if_exists}'"
-        )
+        logger.info(f"Loading dataframe into table: {table_name}")
 
         with self.connection.cursor() as cursor:
-            if if_exists == "replace":
-                cursor.execute(f'DROP TABLE IF EXISTS "{table_name}"')
-                create_table_sql = self._get_create_table_sql(df, table_name)
-                cursor.execute(create_table_sql)
-            elif if_exists == "append":
-                # Ensure table exists for append
-                create_table_sql = self._get_create_table_sql(
-                    df, table_name, if_not_exists=True
-                )
-                cursor.execute(create_table_sql)
+            # Create table if it doesn't exist
+            create_table_sql = self._get_sql_schema(df, table_name)
+            cursor.execute(create_table_sql)
 
-            # Use COPY FROM STDIN
-            buffer = io.StringIO()
-            # Use a more robust delimiter that is less likely to be in the data
-            df.to_csv(buffer, index=False, header=False, sep="	", na_rep="\\N")
+            # Handle if_exists logic
+            if_exists = self.config.get("if_exists", "replace")
+            if if_exists == "replace":
+                logger.info(f"Truncating table {table_name}.")
+                cursor.execute(f'TRUNCATE TABLE "{table_name}";')
+            elif if_exists != "append":
+                raise ValueError(f"Unsupported if_exists option: {if_exists}")
+
+            # Use an in-memory buffer for the CSV data
+            buffer = StringIO()
+            df.to_csv(buffer, index=False, header=False, sep=",")
             buffer.seek(0)
+
             try:
                 cursor.copy_expert(
-                    f"COPY \"{table_name}\" FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', NULL '\\\\N')",
-                    buffer,
+                    sql=f'COPY "{table_name}" FROM STDIN WITH (FORMAT CSV)',
+                    file=buffer,
                 )
                 self.connection.commit()
-                logger.info("DataFrame loaded successfully.")
+                logger.info("Dataframe loaded successfully.")
             except Exception as e:
                 self.connection.rollback()
                 logger.error(f"Failed to load dataframe: {e}")
                 raise
-
-    def _get_create_table_sql(
-        self, df: pd.DataFrame, table_name: str, if_not_exists: bool = False
-    ) -> str:
-        """
-        Generate a CREATE TABLE SQL statement from a DataFrame.
-        """
-        type_mapping = {
-            "int64": "BIGINT",
-            "int32": "INTEGER",
-            "float64": "DOUBLE PRECISION",
-            "float32": "REAL",
-            "bool": "BOOLEAN",
-            "datetime64[ns]": "TIMESTAMP",
-            "object": "TEXT",
-        }
-        columns = []
-        for col_name, dtype in df.dtypes.items():
-            sql_type = type_mapping.get(str(dtype), "TEXT")
-            columns.append(f'"{col_name}" {sql_type}')
-
-        create_clause = (
-            "CREATE TABLE IF NOT EXISTS" if if_not_exists else "CREATE TABLE"
-        )
-        return f'{create_clause} "{table_name}" ({", ".join(columns)})'
