@@ -83,7 +83,7 @@ class MySQLLoader(BaseLoader):
             sql_type = type_mapping.get(dtype, "TEXT")
             cols.append(f"`{col_name}` {sql_type}")
 
-        return f'CREATE TABLE IF NOT EXISTS `{table_name}` ({", ".join(cols)});'
+        return f"CREATE TABLE IF NOT EXISTS `{table_name}` ({', '.join(cols)});"
 
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
         """

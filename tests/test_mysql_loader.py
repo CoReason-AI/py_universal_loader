@@ -8,12 +8,10 @@
 #
 # Source Code: https://github.com/CoReason-AI/py_universal_loader
 
-import os
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from pandas import errors as pd_errors
 
 from py_universal_loader.main import get_loader
 from py_universal_loader.mysql_loader import MySQLLoader
@@ -115,7 +113,9 @@ def test_mysql_loader_load_dataframe_replace(mock_connect, mysql_config, sample_
     loader.load_dataframe(sample_df, "test_replace")
 
     # Assertions
-    create_sql = "CREATE TABLE IF NOT EXISTS `test_replace` (`col_int` BIGINT, `col_str` TEXT);"
+    create_sql = (
+        "CREATE TABLE IF NOT EXISTS `test_replace` (`col_int` BIGINT, `col_str` TEXT);"
+    )
     truncate_sql = "TRUNCATE TABLE `test_replace`;"
 
     mock_cursor.execute.assert_any_call(create_sql)
@@ -150,7 +150,9 @@ def test_mysql_loader_load_dataframe_append(mock_connect, mysql_config, sample_d
     loader.load_dataframe(sample_df, "test_append")
 
     # Assertions
-    create_sql = "CREATE TABLE IF NOT EXISTS `test_append` (`col_int` BIGINT, `col_str` TEXT);"
+    create_sql = (
+        "CREATE TABLE IF NOT EXISTS `test_append` (`col_int` BIGINT, `col_str` TEXT);"
+    )
     truncate_sql = "TRUNCATE TABLE `test_append`;"
 
     mock_cursor.execute.assert_any_call(create_sql)
