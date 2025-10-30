@@ -102,7 +102,7 @@ def test_mssql_loader_load_dataframe_replace(mock_to_csv, mock_connect, sample_d
     loader.load_dataframe(sample_df, "test_table")
 
     mock_to_csv.assert_called_once_with(
-        staging_path, index=False, header=True, sep='|', quotechar='"'
+        staging_path, index=False, header=True, sep="|", quotechar='"'
     )
 
     # Check for DROP, CREATE, and BULK INSERT calls
@@ -145,7 +145,9 @@ def test_mssql_loader_load_dataframe_append(mock_to_csv, mock_connect, sample_df
     for call in mock_cursor.execute.call_args_list:
         assert "DROP TABLE" not in call.args[0]
     create_if_not_exists_call = [
-        call for call in mock_cursor.execute.call_args_list if "IF NOT EXISTS" in call[0][0]
+        call
+        for call in mock_cursor.execute.call_args_list
+        if "IF NOT EXISTS" in call[0][0]
     ]
     assert len(create_if_not_exists_call) == 1
 

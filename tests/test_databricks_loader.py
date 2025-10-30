@@ -181,7 +181,9 @@ class TestDatabricksLoader(unittest.TestCase):
         self.loader.s3_client = MagicMock()
 
         df = pd.DataFrame({"col1": [1, 2]})
-        with pytest.raises(ValueError, match="Unsupported if_exists option: invalid_option"):
+        with pytest.raises(
+            ValueError, match="Unsupported if_exists option: invalid_option"
+        ):
             self.loader.load_dataframe(df, "test_table")
 
 

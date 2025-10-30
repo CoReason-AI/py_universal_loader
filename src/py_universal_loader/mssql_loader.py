@@ -65,14 +65,14 @@ class MSSQLLoader(BaseLoader):
         cols = []
         for col_name, dtype in df.dtypes.items():
             sql_type = type_mapping.get(dtype, "NVARCHAR(MAX)")
-            cols.append(f'[{col_name}] {sql_type}')
+            cols.append(f"[{col_name}] {sql_type}")
 
         # SQL Server doesn't have "CREATE TABLE IF NOT EXISTS" prior to 2016.
         # A check for existence is better done separately.
         if if_not_exists:
             return f"""
             IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='{table_name}' and xtype='U')
-            CREATE TABLE [{table_name}] ({', '.join(cols)});
+            CREATE TABLE [{table_name}] ({", ".join(cols)});
             """
         return f"CREATE TABLE [{table_name}] ({', '.join(cols)});"
 
@@ -102,7 +102,7 @@ class MSSQLLoader(BaseLoader):
             )
 
         # Use a more robust separator and handle potential quotes in data
-        df.to_csv(staging_file_path, index=False, header=True, sep='|', quotechar='"')
+        df.to_csv(staging_file_path, index=False, header=True, sep="|", quotechar='"')
 
         try:
             with self.connection.cursor() as cursor:

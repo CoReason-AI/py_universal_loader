@@ -95,7 +95,9 @@ class DatabricksLoader(BaseLoader):
             sql_type = type_mapping.get(dtype, "STRING")
             cols.append(f"`{col_name}` {sql_type}")
 
-        create_clause = "CREATE TABLE IF NOT EXISTS" if if_not_exists else "CREATE TABLE"
+        create_clause = (
+            "CREATE TABLE IF NOT EXISTS" if if_not_exists else "CREATE TABLE"
+        )
         return f"{create_clause} {table_name} ({', '.join(cols)});"
 
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
