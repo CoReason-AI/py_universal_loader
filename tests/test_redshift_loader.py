@@ -240,6 +240,8 @@ def test_redshift_loader_if_exists_invalid(
     config = {**redshift_config, "if_exists": "invalid_option"}
     loader = RedshiftLoader(config)
     loader.connect()
-    with pytest.raises(ValueError, match="Unsupported if_exists option: invalid_option"):
+    with pytest.raises(
+        ValueError, match="Unsupported if_exists option: invalid_option"
+    ):
         loader.load_dataframe(sample_df, "test_table")
     loader.close()
