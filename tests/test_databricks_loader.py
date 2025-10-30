@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import pytest
 import pandas as pd
+import pyodbc
 
 from py_universal_loader.databricks_loader import DatabricksLoader
 
@@ -51,6 +52,16 @@ class TestDatabricksLoader(unittest.TestCase):
         )
         mock_connect.assert_called_once_with(expected_conn_str, autocommit=True)
         self.assertEqual(self.loader.connection, mock_conn)
+
+    @patch("py_universal_loader.databricks_loader.pyodbc.connect")
+    def test_connect_failure(self, mock_connect):
+        """
+        Tests that a ConnectionError is raised if pyodbc.connect fails.
+        """
+        mock_connect.side_effect = pyodbc.Error("Connection Failed")
+
+        with pytest.raises(ConnectionError, match="Failed to connect to Databricks"):
+            self.loader.connect()
 
     def test_close(self):
         """
