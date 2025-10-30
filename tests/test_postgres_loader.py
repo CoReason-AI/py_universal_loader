@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from pandas import errors as pd_errors
 
 from py_universal_loader.main import get_loader
 from py_universal_loader.postgres_loader import PostgresLoader
@@ -171,9 +170,7 @@ def test_postgres_loader_load_dataframe_exception_rollbacks(
 
 
 @patch("psycopg2.connect")
-def test_postgres_loader_load_dataframe_empty(
-    mock_connect, postgres_config, sample_df
-):
+def test_postgres_loader_load_dataframe_empty(mock_connect, postgres_config, sample_df):
     """
     Test that load_dataframe skips execution for an empty DataFrame.
     """

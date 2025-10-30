@@ -11,7 +11,6 @@
 import io
 from typing import Any, Dict
 
-import numpy as np
 import pandas as pd
 import psycopg2
 from loguru import logger
@@ -83,11 +82,11 @@ class PostgresLoader(BaseLoader):
             # Use COPY FROM STDIN
             buffer = io.StringIO()
             # Use a more robust delimiter that is less likely to be in the data
-            df.to_csv(buffer, index=False, header=False, sep='	', na_rep='\\N')
+            df.to_csv(buffer, index=False, header=False, sep="	", na_rep="\\N")
             buffer.seek(0)
             try:
                 cursor.copy_expert(
-                    f'COPY "{table_name}" FROM STDIN WITH (FORMAT CSV, DELIMITER E\'\\t\', NULL \'\\\\N\')',
+                    f"COPY \"{table_name}\" FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', NULL '\\\\N')",
                     buffer,
                 )
                 self.connection.commit()
