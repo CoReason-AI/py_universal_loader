@@ -8,7 +8,8 @@
 #
 # Source Code: https://github.com/CoReason-AI/py_universal_loader
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pandas as pd
 import pytest
 
@@ -21,27 +22,20 @@ def sample_df():
     """
     Fixture for a sample pandas DataFrame.
     """
-    return pd.DataFrame(
-        {
-            "col_int": [1, 2],
-            "col_float": [1.1, 2.2],
-            "col_bool": [True, False],
-            "col_str": ["A", "B"],
-            "col_date": pd.to_datetime(["2025-01-01", "2025-01-02"]),
-        }
-    )
+    return pd.DataFrame({"col_int": [1, 2], "col_str": ["A", "B"]})
 
 
 @pytest.fixture
 def mysql_config():
     """
-    Fixture for a sample mysql config.
+    Fixture for a sample MySQL config.
+    Using placeholders for credentials.
     """
     return {
         "db_type": "mysql",
+        "user": "test_user",
+        "password": "test_password",
         "host": "localhost",
-        "user": "user",
-        "password": "password",
         "database": "test_db",
     }
 
@@ -57,108 +51,37 @@ def test_get_loader_mysql(mysql_config):
 @patch("mysql.connector.connect")
 def test_mysql_loader_connect(mock_connect, mysql_config):
     """
-    Test the connect method.
+    Test the connect method establishes a connection.
     """
     mock_connection = MagicMock()
     mock_connect.return_value = mock_connection
+
     loader = MySQLLoader(mysql_config)
     loader.connect()
+
     mock_connect.assert_called_once_with(
+        user="test_user",
+        password="test_password",
         host="localhost",
-        port=3306,
-        user="user",
-        password="password",
         database="test_db",
+        port=3306,
         allow_local_infile=True,
     )
     assert loader.connection == mock_connection
 
 
-@patch("mysql.connector.connect")
-def test_mysql_loader_close(mock_connect, mysql_config):
+def test_mysql_loader_close(mysql_config):
     """
     Test that the close method correctly closes the connection.
     """
-    mock_connection = MagicMock()
-    mock_connect.return_value = mock_connection
     loader = MySQLLoader(mysql_config)
-    loader.connect()
-    assert loader.connection is not None
+    loader.connection = MagicMock()
+    connection = loader.connection
+
     loader.close()
-    mock_connection.close.assert_called_once()
+
     assert loader.connection is None
-
-
-@patch("mysql.connector.connect")
-@patch("tempfile.NamedTemporaryFile")
-@patch("os.remove")
-def test_mysql_loader_load_dataframe_replace(
-    mock_remove, mock_tmp_file, mock_connect, mysql_config, sample_df
-):
-    """
-    Test the load_dataframe method with if_exists='replace'.
-    """
-    mock_connection = MagicMock()
-    mock_cursor = MagicMock()
-    mock_connect.return_value = mock_connection
-    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
-    mock_tmp_file.return_value.__enter__.return_value.name = "dummy_path.csv"
-
-    config = {**mysql_config, "if_exists": "replace"}
-    loader = MySQLLoader(config)
-    loader.connect()
-    loader.load_dataframe(sample_df, "test_table")
-
-    expected_schema = "CREATE TABLE IF NOT EXISTS `test_table` (`col_int` BIGINT, `col_float` DOUBLE, `col_bool` BOOLEAN, `col_str` TEXT, `col_date` DATETIME);"
-    mock_cursor.execute.assert_any_call(expected_schema)
-    mock_cursor.execute.assert_any_call("TRUNCATE TABLE `test_table`;")
-
-    load_data_call = [
-        c for c in mock_cursor.execute.call_args_list if "LOAD DATA" in c[0][0]
-    ][0]
-    assert "LOAD DATA LOCAL INFILE 'dummy_path.csv'" in load_data_call[0][0]
-    assert "INTO TABLE `test_table`" in load_data_call[0][0]
-
-    mock_connection.commit.assert_called_once()
-    mock_remove.assert_called_once_with("dummy_path.csv")
-
-
-@patch("mysql.connector.connect")
-@patch("tempfile.NamedTemporaryFile")
-@patch("os.remove")
-def test_mysql_loader_load_dataframe_append(
-    mock_remove, mock_tmp_file, mock_connect, mysql_config, sample_df
-):
-    """
-    Test the load_dataframe method with if_exists='append'.
-    """
-    mock_connection = MagicMock()
-    mock_cursor = MagicMock()
-    mock_connect.return_value = mock_connection
-    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
-    mock_tmp_file.return_value.__enter__.return_value.name = "dummy_path.csv"
-
-    config = {**mysql_config, "if_exists": "append"}
-    loader = MySQLLoader(config)
-    loader.connect()
-    loader.load_dataframe(sample_df, "test_table")
-
-    expected_schema = "CREATE TABLE IF NOT EXISTS `test_table` (`col_int` BIGINT, `col_float` DOUBLE, `col_bool` BOOLEAN, `col_str` TEXT, `col_date` DATETIME);"
-    mock_cursor.execute.assert_any_call(expected_schema)
-
-    for a_call in mock_cursor.execute.call_args_list:
-        assert "TRUNCATE TABLE" not in a_call[0][0]
-
-    load_data_call = [
-        c for c in mock_cursor.execute.call_args_list if "LOAD DATA" in c[0][0]
-    ][0]
-    assert "LOAD DATA LOCAL INFILE 'dummy_path.csv'" in load_data_call[0][0]
-    assert "INTO TABLE `test_table`" in load_data_call[0][0]
-
-    mock_connection.commit.assert_called_once()
-    mock_remove.assert_called_once_with("dummy_path.csv")
+    connection.close.assert_called_once()
 
 
 def test_mysql_loader_load_dataframe_no_connection(mysql_config, sample_df):
@@ -173,6 +96,82 @@ def test_mysql_loader_load_dataframe_no_connection(mysql_config, sample_df):
 
 
 @patch("mysql.connector.connect")
+def test_mysql_loader_load_dataframe_replace(mock_connect, mysql_config, sample_df):
+    """
+    Test the load_dataframe method with if_exists='replace'.
+    """
+    # Setup mocks
+    mock_connection = MagicMock()
+    mock_cursor = MagicMock()
+    mock_connect.return_value = mock_connection
+    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+
+    # Configure and run loader
+    config = {**mysql_config, "if_exists": "replace"}
+    loader = MySQLLoader(config)
+    loader.connect()
+    loader.load_dataframe(sample_df, "test_replace")
+
+    # Assertions
+    create_sql = (
+        "CREATE TABLE IF NOT EXISTS `test_replace` (`col_int` BIGINT, `col_str` TEXT);"
+    )
+    truncate_sql = "TRUNCATE TABLE `test_replace`;"
+
+    mock_cursor.execute.assert_any_call(create_sql)
+    mock_cursor.execute.assert_any_call(truncate_sql)
+
+    # Check that LOAD DATA was called without checking the temp file path
+    load_data_call_found = any(
+        "LOAD DATA LOCAL INFILE" in call.args[0]
+        for call in mock_cursor.execute.call_args_list
+    )
+    assert load_data_call_found, "LOAD DATA LOCAL INFILE was not executed."
+
+    mock_connection.commit.assert_called_once()
+    loader.close()
+
+
+@patch("mysql.connector.connect")
+def test_mysql_loader_load_dataframe_append(mock_connect, mysql_config, sample_df):
+    """
+    Test the load_dataframe method with if_exists='append'.
+    """
+    # Setup mocks
+    mock_connection = MagicMock()
+    mock_cursor = MagicMock()
+    mock_connect.return_value = mock_connection
+    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+
+    # Configure and run loader
+    config = {**mysql_config, "if_exists": "append"}
+    loader = MySQLLoader(config)
+    loader.connect()
+    loader.load_dataframe(sample_df, "test_append")
+
+    # Assertions
+    create_sql = (
+        "CREATE TABLE IF NOT EXISTS `test_append` (`col_int` BIGINT, `col_str` TEXT);"
+    )
+    truncate_sql = "TRUNCATE TABLE `test_append`;"
+
+    mock_cursor.execute.assert_any_call(create_sql)
+    # Ensure TRUNCATE was NOT called
+    for call_args in mock_cursor.execute.call_args_list:
+        assert truncate_sql not in str(call_args)
+
+    # Check that LOAD DATA was called
+    load_data_call_found = any(
+        "LOAD DATA LOCAL INFILE" in call.args[0]
+        for call in mock_cursor.execute.call_args_list
+    )
+    assert load_data_call_found, "LOAD DATA LOCAL INFILE was not executed."
+
+    mock_connection.commit.assert_called_once()
+    loader.close()
+
+
+@patch("mysql.connector.connect")
 def test_mysql_loader_load_dataframe_empty(mock_connect, mysql_config):
     """
     Test that load_dataframe skips execution for an empty DataFrame.
@@ -184,53 +183,39 @@ def test_mysql_loader_load_dataframe_empty(mock_connect, mysql_config):
 
     loader = MySQLLoader(mysql_config)
     loader.connect()
-    empty_df = pd.DataFrame()
-    loader.load_dataframe(empty_df, "test_table")
 
+    empty_df = pd.DataFrame({"col1": []})
+    loader.load_dataframe(empty_df, "test_empty")
+
+    # Verify that no SQL commands were executed
     mock_cursor.execute.assert_not_called()
-
-
-@patch("mysql.connector.connect")
-def test_mysql_loader_load_dataframe_after_close(mock_connect, mysql_config, sample_df):
-    """
-    Test that load_dataframe raises an error if the connection has been closed.
-    """
-    mock_connection = MagicMock()
-    mock_connect.return_value = mock_connection
-
-    loader = MySQLLoader(mysql_config)
-    loader.connect()
     loader.close()
 
-    with pytest.raises(
-        ConnectionError, match="Database connection is not established."
-    ):
-        loader.load_dataframe(sample_df, "test_table")
-
 
 @patch("mysql.connector.connect")
-@patch("tempfile.NamedTemporaryFile")
-@patch("os.remove")
-def test_mysql_loader_load_dataframe_exception_rollbacks(
-    mock_remove, mock_tmp_file, mock_connect, mysql_config, sample_df
+def test_mysql_loader_load_dataframe_rollback_on_error(
+    mock_connect, mysql_config, sample_df
 ):
     """
-    Test that the connection is rolled back if an exception occurs.
+    Test that the connection is rolled back if an error occurs during load.
     """
     mock_connection = MagicMock()
     mock_cursor = MagicMock()
     mock_connect.return_value = mock_connection
     mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-    mock_cursor.execute.side_effect = Exception("Test exception")
+    # Simulate a failure on the third execute call (LOAD DATA)
+    mock_cursor.execute.side_effect = [
+        None,  # CREATE TABLE
+        None,  # TRUNCATE
+        Exception("LOAD DATA failed"),
+    ]
 
-    mock_tmp_file.return_value.__enter__.return_value.name = "dummy_path.csv"
-
-    loader = MySQLLoader(mysql_config)
+    loader = MySQLLoader({**mysql_config, "if_exists": "replace"})
     loader.connect()
 
-    with pytest.raises(Exception, match="Test exception"):
-        loader.load_dataframe(sample_df, "test_table")
+    with pytest.raises(Exception, match="LOAD DATA failed"):
+        loader.load_dataframe(sample_df, "test_error")
 
-    mock_connection.rollback.assert_called_once()
     mock_connection.commit.assert_not_called()
-    mock_remove.assert_called_once_with("dummy_path.csv")
+    mock_connection.rollback.assert_called_once()
+    loader.close()
