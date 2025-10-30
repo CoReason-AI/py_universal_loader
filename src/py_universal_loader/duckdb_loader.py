@@ -23,7 +23,7 @@ class DuckDBLoader(BaseLoader):
     """
 
     def __init__(self, config: Dict[str, Any]):
-        self.config = config
+        super().__init__(config)
         self.connection: duckdb.DuckDBPyConnection | None = None
 
     def connect(self):
@@ -59,25 +59,29 @@ class DuckDBLoader(BaseLoader):
             raise ValueError(f"Unsupported if_exists option: {if_exists}")
 
         logger.info(
-            f"Loading dataframe into table: {table_name} with if_exists='{if_exists}'"
+            f"Loading dataframe into table: \"{table_name}\" with if_exists='{if_exists}'"
         )
 
-        # Register the DataFrame as a virtual table to leverage DuckDB's performance
-        self.connection.register("temp_df_view", df)
+        view_name = f"__temp_view_{table_name}"
 
-        # Ensure the target table exists with the correct schema
-        self.connection.execute(
-            f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM temp_df_view WHERE 1=0"
-        )
+        try:
+            self.connection.register(view_name, df)
 
-        if if_exists == "replace":
-            logger.info(f"Truncating table {table_name}.")
-            self.connection.execute(f"TRUNCATE TABLE {table_name}")
+            if if_exists == "replace":
+                self.connection.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+                self.connection.execute(
+                    f'CREATE TABLE "{table_name}" AS SELECT * FROM {view_name} WHERE 1=0'
+                )
+            elif if_exists == "append":
+                self.connection.execute(
+                    f'CREATE TABLE IF NOT EXISTS "{table_name}" AS SELECT * FROM {view_name} WHERE 1=0'
+                )
 
-        # Use INSERT INTO ... SELECT * FROM to load data
-        self.connection.execute(f"INSERT INTO {table_name} SELECT * FROM temp_df_view")
+            self.connection.execute(
+                f'INSERT INTO "{table_name}" SELECT * FROM {view_name}'
+            )
 
-        # Unregister the virtual table to clean up
-        self.connection.unregister("temp_df_view")
+        finally:
+            self.connection.unregister(view_name)
 
         logger.info("Dataframe loaded successfully.")
