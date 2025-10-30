@@ -23,7 +23,7 @@ class BigQueryLoader(BaseLoader):
     """
 
     def __init__(self, config: Dict[str, Any]):
-        self.config = config
+        super().__init__(config)
         self.client = None
 
     def connect(self):
@@ -54,7 +54,19 @@ class BigQueryLoader(BaseLoader):
             return
 
         logger.info(f"Loading dataframe into table: {table_name}")
-        job_config = self.config.get("job_config", {})
+        job_config = bigquery.LoadJobConfig()
+
+        if_exists = self.config.get("if_exists", "append")
+
+        if if_exists == "replace":
+            job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+        elif if_exists == "append":
+            job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
+        else:
+            raise ValueError(
+                f"Invalid value for if_exists: {if_exists}. "
+                "Allowed values are 'replace' and 'append'."
+            )
         job = self.client.load_table_from_dataframe(
             df, table_name, job_config=job_config
         )

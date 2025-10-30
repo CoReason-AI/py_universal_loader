@@ -75,9 +75,35 @@ def test_bigquery_loader_load_dataframe(mock_client, sample_df):
 
     loader.load_dataframe(sample_df, "test_table")
 
-    loader.client.load_table_from_dataframe.assert_called_once_with(
-        sample_df, "test_table", job_config={}
-    )
+    loader.client.load_table_from_dataframe.assert_called_once()
+
+    _, _, kwargs = loader.client.load_table_from_dataframe.mock_calls[0]
+    job_config = kwargs["job_config"]
+    assert job_config.write_disposition == "WRITE_APPEND"
+
+    mock_job.result.assert_called_once()
+
+
+@patch("py_universal_loader.bigquery_loader.bigquery.Client")
+def test_bigquery_loader_load_dataframe_replace(mock_client, sample_df):
+    """
+    Test the load_dataframe method with if_exists='replace'.
+    """
+    config = {"db_type": "bigquery", "if_exists": "replace"}
+    loader = BigQueryLoader(config)
+    loader.connect()
+
+    mock_job = MagicMock()
+    loader.client.load_table_from_dataframe.return_value = mock_job
+
+    loader.load_dataframe(sample_df, "test_table")
+
+    loader.client.load_table_from_dataframe.assert_called_once()
+
+    _, _, kwargs = loader.client.load_table_from_dataframe.mock_calls[0]
+    job_config = kwargs["job_config"]
+    assert job_config.write_disposition == "WRITE_TRUNCATE"
+
     mock_job.result.assert_called_once()
 
 
