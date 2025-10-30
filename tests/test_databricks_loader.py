@@ -85,8 +85,10 @@ class TestDatabricksLoader(unittest.TestCase):
         self.loader.load_dataframe(df, table_name)
 
         mock_s3.upload_fileobj.assert_called_once()
+        # Verify DROP TABLE and CREATE TABLE are called for default "replace"
+        mock_cursor.execute.assert_any_call("DROP TABLE IF EXISTS test_table")
         mock_cursor.execute.assert_any_call(
-            "CREATE TABLE IF NOT EXISTS test_table (`col1` BIGINT, `col2` STRING);"
+            "CREATE TABLE test_table (`col1` BIGINT, `col2` STRING);"
         )
         expected_copy_sql = """
                     COPY INTO test_table
@@ -137,6 +139,52 @@ class TestDatabricksLoader(unittest.TestCase):
             self.loader.load_dataframe(df, "test_table")
 
         mock_s3.delete_object.assert_not_called()
+
+    @patch("py_universal_loader.databricks_loader.uuid.uuid4", return_value="test-uuid")
+    @patch("py_universal_loader.databricks_loader.boto3.client")
+    def test_load_dataframe_if_exists_append(self, mock_boto3_client, mock_uuid):
+        """
+        Tests that DROP TABLE is not called when if_exists is 'append'.
+        """
+        self.config["if_exists"] = "append"
+        self.loader = DatabricksLoader(self.config)
+        mock_s3 = MagicMock()
+        mock_boto3_client.return_value = mock_s3
+        self.loader.s3_client = mock_s3
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+        self.loader.connection = mock_conn
+
+        df = pd.DataFrame({"col1": [1, 2]})
+        table_name = "test_table"
+
+        self.loader.load_dataframe(df, table_name)
+
+        # Assert that DROP TABLE was NOT called
+        for call in mock_cursor.execute.call_args_list:
+            self.assertNotIn("DROP TABLE", call.args[0])
+
+        # Assert that CREATE TABLE IF NOT EXISTS was called
+        mock_cursor.execute.assert_any_call(
+            "CREATE TABLE IF NOT EXISTS test_table (`col1` BIGINT);"
+        )
+
+    def test_load_dataframe_if_exists_invalid(self):
+        """
+        Tests that a ValueError is raised for an invalid if_exists option.
+        """
+        self.config["if_exists"] = "invalid_option"
+        self.loader = DatabricksLoader(self.config)
+        self.loader.connection = MagicMock()
+        self.loader.s3_client = MagicMock()
+
+        df = pd.DataFrame({"col1": [1, 2]})
+        with pytest.raises(
+            ValueError, match="Unsupported if_exists option: invalid_option"
+        ):
+            self.loader.load_dataframe(df, "test_table")
 
 
 if __name__ == "__main__":

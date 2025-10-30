@@ -78,9 +78,9 @@ def test_mssql_loader_close(mock_connect):
 
 @patch("pyodbc.connect")
 @patch("pandas.DataFrame.to_csv")
-def test_mssql_loader_load_dataframe(mock_to_csv, mock_connect, sample_df):
+def test_mssql_loader_load_dataframe_replace(mock_to_csv, mock_connect, sample_df):
     """
-    Test the load_dataframe method.
+    Test the load_dataframe method with if_exists='replace'.
     """
     mock_connection = MagicMock()
     mock_cursor = MagicMock()
@@ -95,16 +95,81 @@ def test_mssql_loader_load_dataframe(mock_to_csv, mock_connect, sample_df):
         "username": "user",
         "password": "password",
         "staging_file_path": staging_path,
+        "if_exists": "replace",
     }
     loader = MSSQLLoader(config)
     loader.connect()
     loader.load_dataframe(sample_df, "test_table")
 
-    mock_to_csv.assert_called_once_with(staging_path, index=False, header=False)
+    mock_to_csv.assert_called_once_with(
+        staging_path, index=False, header=True, sep="|", quotechar='"'
+    )
+
+    # Check for DROP, CREATE, and BULK INSERT calls
+    mock_cursor.execute.assert_any_call("DROP TABLE IF EXISTS [test_table]")
+    mock_cursor.execute.assert_any_call(
+        "CREATE TABLE [test_table] ([col1] BIGINT, [col2] NVARCHAR(MAX));"
+    )
     execute_call = mock_cursor.execute.call_args[0][0]
-    assert "BULK INSERT test_table" in execute_call
+    assert "BULK INSERT [test_table]" in execute_call
     assert f"FROM '{staging_path}'" in execute_call
     mock_connection.commit.assert_called_once()
+
+
+@patch("pyodbc.connect")
+@patch("pandas.DataFrame.to_csv")
+def test_mssql_loader_load_dataframe_append(mock_to_csv, mock_connect, sample_df):
+    """
+    Test the load_dataframe method with if_exists='append'.
+    """
+    mock_connection = MagicMock()
+    mock_cursor = MagicMock()
+    mock_connect.return_value = mock_connection
+    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+
+    staging_path = "/path/to/staging/file.csv"
+    config = {
+        "db_type": "mssql",
+        "server": "localhost",
+        "database": "test_db",
+        "username": "user",
+        "password": "password",
+        "staging_file_path": staging_path,
+        "if_exists": "append",
+    }
+    loader = MSSQLLoader(config)
+    loader.connect()
+    loader.load_dataframe(sample_df, "test_table")
+
+    # Check that CREATE IF NOT EXISTS is called, but not DROP
+    for call in mock_cursor.execute.call_args_list:
+        assert "DROP TABLE" not in call.args[0]
+    create_if_not_exists_call = [
+        call
+        for call in mock_cursor.execute.call_args_list
+        if "IF NOT EXISTS" in call[0][0]
+    ]
+    assert len(create_if_not_exists_call) == 1
+
+
+def test_mssql_loader_invalid_if_exists(sample_df):
+    """
+    Test that a ValueError is raised for an invalid if_exists option.
+    """
+    config = {
+        "db_type": "mssql",
+        "server": "localhost",
+        "database": "test_db",
+        "username": "user",
+        "password": "password",
+        "staging_file_path": "/path/to/staging/file.csv",
+        "if_exists": "invalid",
+    }
+    loader = MSSQLLoader(config)
+    loader.connection = MagicMock()  # Mock connection
+
+    with pytest.raises(ValueError, match="Unsupported if_exists option: invalid"):
+        loader.load_dataframe(sample_df, "test_table")
 
 
 @patch("pyodbc.connect")
