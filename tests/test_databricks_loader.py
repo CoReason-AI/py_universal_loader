@@ -207,5 +207,7 @@ def test_load_dataframe_if_exists_invalid(config):
     loader.s3_client = MagicMock()
 
     df = pd.DataFrame({"col1": [1, 2]})
-    with pytest.raises(ValueError, match="Unsupported if_exists option: invalid_option"):
+    with pytest.raises(
+        ValueError, match="Unsupported if_exists option: invalid_option"
+    ):
         loader.load_dataframe(df, "test_table")
