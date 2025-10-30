@@ -111,8 +111,8 @@ def test_redshift_loader_load_dataframe_success(
     assert args[2].startswith("staging/test_table_")
 
     # Verify COPY command was executed with correct parameters
-    assert mock_cursor.execute.call_count == 2  # CREATE TABLE + COPY
-    copy_sql = mock_cursor.execute.call_args_list[1][0][0]
+    assert mock_cursor.execute.call_count == 3  # DROP + CREATE TABLE + COPY
+    copy_sql = mock_cursor.execute.call_args_list[2][0][0]
     assert 'COPY "test_table"' in copy_sql
     assert "s3://test-bucket/staging/test_table_" in copy_sql
     assert "IAM_ROLE 'arn:aws:iam::123456789012:role/test-role'" in copy_sql
@@ -181,3 +181,65 @@ def test_redshift_loader_load_dataframe_no_connection(redshift_config, sample_df
     loader = RedshiftLoader(redshift_config)
     with pytest.raises(ConnectionError, match="Connection is not established"):
         loader.load_dataframe(sample_df, "test_table")
+
+
+@patch("boto3.client")
+@patch("psycopg2.connect")
+def test_redshift_loader_if_exists_replace(
+    mock_psycopg2_connect, mock_boto3_client, redshift_config, sample_df
+):
+    """Test the 'replace' functionality for if_exists."""
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_psycopg2_connect.return_value = mock_conn
+
+    config = {**redshift_config, "if_exists": "replace"}
+    loader = RedshiftLoader(config)
+    loader.connect()
+    loader.load_dataframe(sample_df, "test_table")
+
+    # Check that DROP TABLE and CREATE TABLE were called
+    assert mock_cursor.execute.call_count == 3  # DROP, CREATE, COPY
+    drop_sql = mock_cursor.execute.call_args_list[0][0][0]
+    create_sql = mock_cursor.execute.call_args_list[1][0][0]
+    assert 'DROP TABLE IF EXISTS "test_table"' in drop_sql
+    assert 'CREATE TABLE "test_table"' in create_sql
+    loader.close()
+
+
+@patch("boto3.client")
+@patch("psycopg2.connect")
+def test_redshift_loader_if_exists_append(
+    mock_psycopg2_connect, mock_boto3_client, redshift_config, sample_df
+):
+    """Test the 'append' functionality for if_exists."""
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_psycopg2_connect.return_value = mock_conn
+
+    config = {**redshift_config, "if_exists": "append"}
+    loader = RedshiftLoader(config)
+    loader.connect()
+    loader.load_dataframe(sample_df, "test_table")
+
+    # Check that CREATE TABLE IF NOT EXISTS was called
+    assert mock_cursor.execute.call_count == 2  # CREATE IF NOT EXISTS, COPY
+    create_sql = mock_cursor.execute.call_args_list[0][0][0]
+    assert "CREATE TABLE IF NOT EXISTS" in create_sql
+    loader.close()
+
+
+@patch("boto3.client")
+@patch("psycopg2.connect")
+def test_redshift_loader_if_exists_invalid(
+    mock_psycopg2_connect, mock_boto3_client, redshift_config, sample_df
+):
+    """Test that an invalid if_exists option raises a ValueError."""
+    config = {**redshift_config, "if_exists": "invalid_option"}
+    loader = RedshiftLoader(config)
+    loader.connect()
+    with pytest.raises(ValueError, match="Unsupported if_exists option: invalid_option"):
+        loader.load_dataframe(sample_df, "test_table")
+    loader.close()
