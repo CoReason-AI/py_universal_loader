@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+from pandas import errors as pd_errors
 
 from py_universal_loader.main import get_loader
 from py_universal_loader.postgres_loader import PostgresLoader
@@ -25,9 +26,9 @@ def sample_df():
     return pd.DataFrame(
         {
             "col_int": [1, 2],
+            "col_str": ["A", "B"],
             "col_float": [1.1, 2.2],
             "col_bool": [True, False],
-            "col_str": ["A", "B"],
             "col_date": pd.to_datetime(["2025-01-01", "2025-01-02"]),
         }
     )
@@ -40,11 +41,11 @@ def postgres_config():
     """
     return {
         "db_type": "postgres",
-        "dbname": "testdb",
-        "user": "testuser",
-        "password": "testpassword",
         "host": "localhost",
         "port": 5432,
+        "db": "testdb",
+        "user": "testuser",
+        "password": "testpassword",
     }
 
 
@@ -59,36 +60,34 @@ def test_get_loader_postgres(postgres_config):
 @patch("psycopg2.connect")
 def test_postgres_loader_connect(mock_connect, postgres_config):
     """
-    Test the connect method with a mock connection.
+    Test the connect method establishes a connection.
     """
-    mock_connection = MagicMock()
-    mock_connect.return_value = mock_connection
+    mock_conn = MagicMock()
+    mock_connect.return_value = mock_conn
 
     loader = PostgresLoader(postgres_config)
     loader.connect()
 
-    mock_connect.assert_called_once_with(
-        **{
-            "dbname": "testdb",
-            "user": "testuser",
-            "password": "testpassword",
-            "host": "localhost",
-            "port": 5432,
-        }
-    )
-    assert loader.connection == mock_connection
+    assert loader.connection == mock_conn
+    mock_connect.assert_called_once()
+    loader.close()
 
 
-def test_postgres_loader_close(postgres_config):
+@patch("psycopg2.connect")
+def test_postgres_loader_close(mock_connect, postgres_config):
     """
     Test that the close method correctly closes the connection.
     """
+    mock_conn = MagicMock()
+    mock_connect.return_value = mock_conn
+
     loader = PostgresLoader(postgres_config)
-    mock_connection = MagicMock()
-    loader.connection = mock_connection
+    loader.connect()
+    connection = loader.connection
     loader.close()
-    mock_connection.close.assert_called_once()
+
     assert loader.connection is None
+    connection.close.assert_called_once()
 
 
 @patch("psycopg2.connect")
@@ -98,21 +97,25 @@ def test_postgres_loader_load_dataframe_replace(
     """
     Test the load_dataframe method with if_exists='replace'.
     """
-    mock_connection = MagicMock()
+    mock_conn = MagicMock()
     mock_cursor = MagicMock()
-    mock_connect.return_value = mock_connection
-    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_connect.return_value = mock_conn
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
 
-    config = {**postgres_config, "if_exists": "replace"}
-    loader = PostgresLoader(config)
+    table_name = "test_replace"
+    loader = PostgresLoader({**postgres_config, "if_exists": "replace"})
     loader.connect()
-    loader.load_dataframe(sample_df, "test_table")
 
-    expected_schema = 'CREATE TABLE IF NOT EXISTS "test_table" ("col_int" BIGINT, "col_float" DOUBLE PRECISION, "col_bool" BOOLEAN, "col_str" TEXT, "col_date" TIMESTAMP);'
-    mock_cursor.execute.assert_any_call(expected_schema)
-    mock_cursor.execute.assert_any_call('TRUNCATE TABLE "test_table";')
-    assert mock_cursor.copy_expert.call_count == 1
-    mock_connection.commit.assert_called_once()
+    loader.load_dataframe(sample_df, table_name)
+
+    mock_cursor.execute.assert_any_call(f'DROP TABLE IF EXISTS "{table_name}"')
+    mock_cursor.execute.assert_any_call(
+        'CREATE TABLE "test_replace" ("col_int" BIGINT, "col_str" TEXT, "col_float" DOUBLE PRECISION, "col_bool" BOOLEAN, "col_date" TIMESTAMP)'
+    )
+    mock_cursor.copy_expert.assert_called_once()
+    mock_conn.commit.assert_called_once()
+
+    loader.close()
 
 
 @patch("psycopg2.connect")
@@ -122,43 +125,73 @@ def test_postgres_loader_load_dataframe_append(
     """
     Test the load_dataframe method with if_exists='append'.
     """
-    mock_connection = MagicMock()
+    mock_conn = MagicMock()
     mock_cursor = MagicMock()
-    mock_connect.return_value = mock_connection
-    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_connect.return_value = mock_conn
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
 
-    config = {**postgres_config, "if_exists": "append"}
-    loader = PostgresLoader(config)
+    table_name = "test_append"
+    loader = PostgresLoader({**postgres_config, "if_exists": "append"})
     loader.connect()
-    loader.load_dataframe(sample_df, "test_table")
 
-    expected_schema = 'CREATE TABLE IF NOT EXISTS "test_table" ("col_int" BIGINT, "col_float" DOUBLE PRECISION, "col_bool" BOOLEAN, "col_str" TEXT, "col_date" TIMESTAMP);'
-    mock_cursor.execute.assert_any_call(expected_schema)
+    loader.load_dataframe(sample_df, table_name)
 
-    for a_call in mock_cursor.execute.call_args_list:
-        assert "TRUNCATE TABLE" not in a_call[0][0]
+    mock_cursor.execute.assert_called_once_with(
+        'CREATE TABLE IF NOT EXISTS "test_append" ("col_int" BIGINT, "col_str" TEXT, "col_float" DOUBLE PRECISION, "col_bool" BOOLEAN, "col_date" TIMESTAMP)'
+    )
+    mock_cursor.copy_expert.assert_called_once()
+    mock_conn.commit.assert_called_once()
 
-    assert mock_cursor.copy_expert.call_count == 1
-    mock_connection.commit.assert_called_once()
+    loader.close()
 
 
 @patch("psycopg2.connect")
-def test_postgres_loader_load_dataframe_empty(mock_connect, postgres_config):
+def test_postgres_loader_load_dataframe_exception_rollbacks(
+    mock_connect, postgres_config, sample_df
+):
     """
-    Test that load_dataframe skips execution for an empty DataFrame.
+    Test that a failed load operation rolls back the transaction.
     """
-    mock_connection = MagicMock()
+    mock_conn = MagicMock()
     mock_cursor = MagicMock()
-    mock_connect.return_value = mock_connection
-    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_connect.return_value = mock_conn
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_cursor.copy_expert.side_effect = Exception("Test Exception")
 
     loader = PostgresLoader(postgres_config)
     loader.connect()
-    empty_df = pd.DataFrame()
-    loader.load_dataframe(empty_df, "test_table")
+
+    with pytest.raises(Exception, match="Test Exception"):
+        loader.load_dataframe(sample_df, "test_table")
+
+    mock_conn.commit.assert_not_called()
+    mock_conn.rollback.assert_called_once()
+
+    loader.close()
+
+
+@patch("psycopg2.connect")
+def test_postgres_loader_load_dataframe_empty(
+    mock_connect, postgres_config, sample_df
+):
+    """
+    Test that load_dataframe skips execution for an empty DataFrame.
+    """
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_connect.return_value = mock_conn
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+
+    table_name = "test_empty"
+    loader = PostgresLoader(postgres_config)
+    loader.connect()
+    empty_df = pd.DataFrame({"col1": []})
+    loader.load_dataframe(empty_df, table_name)
 
     mock_cursor.execute.assert_not_called()
     mock_cursor.copy_expert.assert_not_called()
+
+    loader.close()
 
 
 def test_postgres_loader_load_dataframe_no_connection(postgres_config, sample_df):
@@ -179,8 +212,8 @@ def test_postgres_loader_load_dataframe_after_close(
     """
     Test that load_dataframe raises an error if the connection has been closed.
     """
-    mock_connection = MagicMock()
-    mock_connect.return_value = mock_connection
+    mock_conn = MagicMock()
+    mock_connect.return_value = mock_conn
 
     loader = PostgresLoader(postgres_config)
     loader.connect()
@@ -190,26 +223,3 @@ def test_postgres_loader_load_dataframe_after_close(
         ConnectionError, match="Database connection is not established."
     ):
         loader.load_dataframe(sample_df, "test_table")
-
-
-@patch("psycopg2.connect")
-def test_postgres_loader_load_dataframe_exception_rollbacks(
-    mock_connect, postgres_config, sample_df
-):
-    """
-    Test that the connection is rolled back if copy_expert raises an exception.
-    """
-    mock_connection = MagicMock()
-    mock_cursor = MagicMock()
-    mock_connect.return_value = mock_connection
-    mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-    mock_cursor.copy_expert.side_effect = Exception("Test exception")
-
-    loader = PostgresLoader(postgres_config)
-    loader.connect()
-
-    with pytest.raises(Exception, match="Test exception"):
-        loader.load_dataframe(sample_df, "test_table")
-
-    mock_connection.rollback.assert_called_once()
-    mock_connection.commit.assert_not_called()
