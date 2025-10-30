@@ -89,12 +89,13 @@ def test_snowflake_loader_close(
     assert loader.connection is None
 
 
+@patch("py_universal_loader.snowflake_loader.uuid.uuid4", return_value="test-uuid")
 @patch("boto3.client")
 @patch("snowflake.connector.connect")
-def test_snowflake_loader_load_dataframe(
-    mock_snowflake_connect, mock_boto3_client, snowflake_config, sample_df
+def test_snowflake_loader_load_dataframe_replace(
+    mock_snowflake_connect, mock_boto3_client, mock_uuid, snowflake_config, sample_df
 ):
-    """Test a successful data load, verifying S3 upload, COPY, and S3 delete."""
+    """Test a successful data load with if_exists='replace'."""
     mock_s3 = MagicMock()
     mock_boto3_client.return_value = mock_s3
     mock_conn = MagicMock()
@@ -102,14 +103,63 @@ def test_snowflake_loader_load_dataframe(
     mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
     mock_snowflake_connect.return_value = mock_conn
 
+    # Default is replace, so no need to set it in config
     loader = SnowflakeLoader(snowflake_config)
     loader.connect()
     loader.load_dataframe(sample_df, "test_table")
 
     mock_s3.upload_fileobj.assert_called_once()
-    mock_cursor.execute.assert_called_once()
+
+    # Check that DROP, CREATE, and COPY are called in order
+    mock_cursor.execute.assert_any_call('DROP TABLE IF EXISTS "test_table"')
+    mock_cursor.execute.assert_any_call(
+        'CREATE TABLE "test_table" ("col1" BIGINT, "col2" VARCHAR);'
+    )
+    copy_sql_call = [
+        call for call in mock_cursor.execute.call_args_list if "COPY INTO" in call[0][0]
+    ]
+    assert len(copy_sql_call) == 1
+
     mock_conn.commit.assert_called_once()
     mock_s3.delete_object.assert_called_once()
+
+
+@patch("py_universal_loader.snowflake_loader.uuid.uuid4", return_value="test-uuid")
+@patch("boto3.client")
+@patch("snowflake.connector.connect")
+def test_snowflake_loader_load_dataframe_append(
+    mock_snowflake_connect, mock_boto3_client, mock_uuid, snowflake_config, sample_df
+):
+    """Test a successful data load with if_exists='append'."""
+    mock_s3 = MagicMock()
+    mock_boto3_client.return_value = mock_s3
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_snowflake_connect.return_value = mock_conn
+
+    snowflake_config["if_exists"] = "append"
+    loader = SnowflakeLoader(snowflake_config)
+    loader.connect()
+    loader.load_dataframe(sample_df, "test_table")
+
+    # Check that CREATE IF NOT EXISTS is called, but not DROP
+    for call in mock_cursor.execute.call_args_list:
+        assert "DROP TABLE" not in call.args[0]
+    mock_cursor.execute.assert_any_call(
+        'CREATE TABLE IF NOT EXISTS "test_table" ("col1" BIGINT, "col2" VARCHAR);'
+    )
+
+
+def test_snowflake_loader_invalid_if_exists(snowflake_config, sample_df):
+    """Test that a ValueError is raised for an invalid if_exists option."""
+    snowflake_config["if_exists"] = "invalid"
+    loader = SnowflakeLoader(snowflake_config)
+    loader.connection = MagicMock()  # Mock connection to bypass connect()
+    loader.s3_client = MagicMock()
+
+    with pytest.raises(ValueError, match="Unsupported if_exists option: invalid"):
+        loader.load_dataframe(sample_df, "test_table")
 
 
 def test_snowflake_loader_load_dataframe_no_connection(snowflake_config, sample_df):
