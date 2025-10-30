@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "py_universal_loader"
+name = "py-universal-loader"
 version = "0.1.0"
 description = "A unified, high-performance Python package for bulk-loading pandas DataFrames into diverse SQL databases and data warehouses.It provides a single, configuration-driven API that abstracts the most efficient native bulk-loading methods (e.g., `COPY`, `BULK INSERT`) for each backend."
 authors = ["Gowtham A Rao <gowtham.rao@coreason.ai>"]
