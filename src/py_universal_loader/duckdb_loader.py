@@ -45,7 +45,7 @@ class DuckDBLoader(BaseLoader):
 
     def load_dataframe(self, df: pd.DataFrame, table_name: str):
         """
-        Execute the entire data ingestion process using DuckDB's efficient loading.
+        Load a DataFrame into a DuckDB table using a virtual table.
         """
         if not self.connection:
             raise ConnectionError("Database connection is not established.")
@@ -62,26 +62,29 @@ class DuckDBLoader(BaseLoader):
             f"Loading dataframe into table: \"{table_name}\" with if_exists='{if_exists}'"
         )
 
-        view_name = f"__temp_view_{table_name}"
+        view_name = f"__view_{table_name}_{id(df)}"
 
         try:
+            # Register the DataFrame as a virtual table (view)
             self.connection.register(view_name, df)
 
             if if_exists == "replace":
-                self.connection.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+                # Atomically create or replace the table with the data from the view
                 self.connection.execute(
-                    f'CREATE TABLE "{table_name}" AS SELECT * FROM {view_name} WHERE 1=0'
+                    f'CREATE OR REPLACE TABLE "{table_name}" AS SELECT * FROM {view_name}'
                 )
             elif if_exists == "append":
+                # Ensure the table exists, creating it from the view schema if it doesn't
                 self.connection.execute(
                     f'CREATE TABLE IF NOT EXISTS "{table_name}" AS SELECT * FROM {view_name} WHERE 1=0'
                 )
-
-            self.connection.execute(
-                f'INSERT INTO "{table_name}" SELECT * FROM {view_name}'
-            )
+                # Insert the data from the view into the existing or new table
+                self.connection.execute(
+                    f'INSERT INTO "{table_name}" SELECT * FROM {view_name}'
+                )
 
         finally:
+            # Clean up the registered view
             self.connection.unregister(view_name)
 
         logger.info("Dataframe loaded successfully.")
