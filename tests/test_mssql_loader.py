@@ -8,7 +8,8 @@
 #
 # Source Code: https://github.com/CoReason-AI/py_universal_loader
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pandas as pd
 import pytest
 
