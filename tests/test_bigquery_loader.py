@@ -12,11 +12,11 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from google.cloud import bigquery
 from google.api_core import exceptions as google_exceptions
+from google.cloud import bigquery
 
-from py_universal_loader.main import get_loader
 from py_universal_loader.bigquery_loader import BigQueryLoader
+from py_universal_loader.main import get_loader
 
 
 @pytest.fixture
