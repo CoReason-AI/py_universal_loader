@@ -8,109 +8,207 @@
 #
 # Source Code: https://github.com/CoReason-AI/py_universal_loader
 
-import pytest
 from unittest.mock import MagicMock, patch
+
 import pandas as pd
+import pyodbc
+import pytest
 
 from py_universal_loader.databricks_loader import DatabricksLoader
 
-@pytest.fixture
-def mock_pyodbc_connect():
-    with patch('pyodbc.connect') as mock_connect:
-        yield mock_connect
 
 @pytest.fixture
-def mock_boto3_client():
-    with patch('boto3.client') as mock_client:
-        yield mock_client
-
-@pytest.fixture
-def databricks_loader(mock_pyodbc_connect, mock_boto3_client):
-    config = {
-        'db_type': 'databricks',
-        'server_hostname': 'test-hostname',
-        'http_path': 'test-path',
-        'access_token': 'test-token',
-        's3_bucket': 'test-bucket',
-        'iam_role_arn': 'test-role'
+def config():
+    """Provides a standard configuration for the DatabricksLoader."""
+    return {
+        "db_type": "databricks",
+        "server_hostname": "test_hostname",
+        "http_path": "test_http_path",
+        "access_token": "test_access_token",
+        "s3_bucket": "test_bucket",
+        "iam_role_arn": "test_iam_role",
     }
-    loader = DatabricksLoader(config)
 
-    mock_connection = mock_pyodbc_connect.return_value
-    mock_cursor = mock_connection.cursor.return_value.__enter__.return_value
 
-    loader.connection = mock_connection
-    loader.s3_client = mock_boto3_client.return_value
+@pytest.fixture
+def loader(config):
+    """Provides an instance of DatabricksLoader."""
+    return DatabricksLoader(config)
 
-    loader.mock_cursor = mock_cursor
-    return loader
 
-def test_connect(mock_pyodbc_connect, mock_boto3_client):
-    config = {
-        'server_hostname': 'test-hostname',
-        'http_path': 'test-path',
-        'access_token': 'test-token',
-        'driver_path': 'test-driver'
-    }
-    loader = DatabricksLoader(config)
+@patch("py_universal_loader.databricks_loader.pyodbc.connect")
+def test_connect_success(mock_connect, loader):
+    """
+    Tests that the connect method constructs the correct connection string and calls pyodbc.connect.
+    """
+    mock_conn = MagicMock()
+    mock_connect.return_value = mock_conn
+
     loader.connect()
-    mock_pyodbc_connect.assert_called_once()
-    mock_boto3_client.assert_called_once_with('s3')
 
-def test_close(databricks_loader):
-    databricks_loader.connect()
-    databricks_loader.close()
-    assert databricks_loader.connection is None
+    expected_conn_str = (
+        "Driver=/Library/simba/spark/lib/libsparkodbc_sb64-universal.dylib;"
+        "Host=test_hostname;"
+        "Port=443;"
+        "HTTPPath=test_http_path;"
+        "SSL=1;"
+        "ThriftTransport=2;"
+        "AuthMech=3;"
+        "UID=token;"
+        "PWD=test_access_token"
+    )
+    mock_connect.assert_called_once_with(expected_conn_str, autocommit=True)
+    assert loader.connection == mock_conn
 
-def test_load_dataframe_replace(databricks_loader):
-    df = pd.DataFrame({'a': [1, 2], 'b': ['x', 'y']})
-    table_name = 'test_table'
 
-    databricks_loader.load_dataframe(df, table_name)
+@patch("py_universal_loader.databricks_loader.pyodbc.connect")
+def test_connect_failure(mock_connect, loader):
+    """
+    Tests that a ConnectionError is raised if pyodbc.connect fails.
+    """
+    mock_connect.side_effect = pyodbc.Error("Connection Failed")
 
-    databricks_loader.s3_client.upload_fileobj.assert_called_once()
-    databricks_loader.mock_cursor.execute.assert_any_call('DROP TABLE IF EXISTS test_table')
-    databricks_loader.s3_client.delete_object.assert_called_once()
+    with pytest.raises(ConnectionError, match="Failed to connect to Databricks"):
+        loader.connect()
 
-def test_load_dataframe_append(databricks_loader):
-    databricks_loader.config['if_exists'] = 'append'
-    df = pd.DataFrame({'a': [1, 2], 'b': ['x', 'y']})
-    table_name = 'test_table'
 
-    databricks_loader.load_dataframe(df, table_name)
+def test_close(loader):
+    """
+    Tests that the close method calls the connection's close method.
+    """
+    mock_conn = MagicMock()
+    loader.connection = mock_conn
 
-    databricks_loader.s3_client.upload_fileobj.assert_called_once()
-    databricks_loader.mock_cursor.execute.assert_any_call('CREATE TABLE IF NOT EXISTS test_table (`a` BIGINT, `b` STRING);')
-    databricks_loader.s3_client.delete_object.assert_called_once()
+    loader.close()
 
-def test_load_dataframe_empty(databricks_loader):
-    df = pd.DataFrame()
-    table_name = 'test_table'
+    mock_conn.close.assert_called_once()
+    assert loader.connection is None
 
-    databricks_loader.load_dataframe(df, table_name)
 
-    databricks_loader.s3_client.upload_fileobj.assert_not_called()
+@patch("py_universal_loader.databricks_loader.uuid.uuid4", return_value="test-uuid")
+@patch("py_universal_loader.databricks_loader.boto3.client")
+def test_load_dataframe_success(mock_boto3_client, mock_uuid, loader):
+    """
+    Tests the successful execution of the load_dataframe method.
+    """
+    mock_s3 = MagicMock()
+    mock_boto3_client.return_value = mock_s3
+    loader.s3_client = mock_s3
 
-def test_load_dataframe_no_connection(databricks_loader):
-    databricks_loader.connection = None
-    df = pd.DataFrame({'a': [1]})
-    with pytest.raises(ConnectionError, match=r"Connection is not established. Call connect\(\) first."):
-        databricks_loader.load_dataframe(df, 'test_table')
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    loader.connection = mock_conn
 
-def test_load_dataframe_invalid_if_exists(databricks_loader):
-    databricks_loader.config['if_exists'] = 'fail'
-    df = pd.DataFrame({'a': [1]})
-    with pytest.raises(ValueError, match="Unsupported if_exists option: fail"):
-        databricks_loader.load_dataframe(df, 'test_table')
+    df = pd.DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
+    table_name = "test_table"
 
-def test_load_dataframe_no_s3_bucket(databricks_loader):
-    databricks_loader.config['s3_bucket'] = None
-    df = pd.DataFrame({'a': [1]})
-    with pytest.raises(ValueError, match="'s3_bucket' must be specified in the config"):
-        databricks_loader.load_dataframe(df, 'test_table')
+    loader.load_dataframe(df, table_name)
 
-def test_load_dataframe_no_iam_role(databricks_loader):
-    databricks_loader.config['iam_role_arn'] = None
-    df = pd.DataFrame({'a': [1]})
-    with pytest.raises(ValueError, match="'iam_role_arn' must be specified in the config"):
-        databricks_loader.load_dataframe(df, 'test_table')
+    mock_s3.upload_fileobj.assert_called_once()
+    # Verify DROP TABLE and CREATE TABLE are called for default "replace"
+    mock_cursor.execute.assert_any_call("DROP TABLE IF EXISTS test_table")
+    mock_cursor.execute.assert_any_call(
+        "CREATE TABLE test_table (`col1` BIGINT, `col2` STRING);"
+    )
+    expected_copy_sql = """
+                    COPY INTO test_table
+                    FROM 's3://test_bucket/staging/test_table_test-uuid.parquet'
+                    WITH (CREDENTIAL (AWS_IAM_ROLE = 'test_iam_role'))
+                    FILEFORMAT = PARQUET
+                """
+    mock_cursor.execute.assert_any_call(expected_copy_sql)
+    mock_s3.delete_object.assert_called_once_with(
+        Bucket="test_bucket", Key="staging/test_table_test-uuid.parquet"
+    )
+
+
+@patch("py_universal_loader.databricks_loader.boto3.client")
+def test_load_dataframe_s3_upload_fails(mock_boto3_client, loader):
+    """
+    Tests that an IOError is raised if the S3 upload fails.
+    """
+    mock_s3 = MagicMock()
+    mock_s3.upload_fileobj.side_effect = Exception("S3 Upload Error")
+    mock_boto3_client.return_value = mock_s3
+    loader.s3_client = mock_s3
+    loader.connection = MagicMock()
+
+    df = pd.DataFrame({"col1": [1, 2]})
+    with pytest.raises(IOError, match="Failed to upload staged file to S3"):
+        loader.load_dataframe(df, "test_table")
+
+
+@patch("py_universal_loader.databricks_loader.uuid.uuid4", return_value="test-uuid")
+@patch("py_universal_loader.databricks_loader.boto3.client")
+def test_load_dataframe_copy_fails(mock_boto3_client, mock_uuid, loader):
+    """
+    Tests that an IOError is raised and the S3 file is not deleted if the COPY command fails.
+    """
+    mock_s3 = MagicMock()
+    mock_boto3_client.return_value = mock_s3
+    loader.s3_client = mock_s3
+
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_cursor.execute.side_effect = [
+        None,  # DROP TABLE
+        None,  # CREATE TABLE
+        Exception("COPY failed"),
+    ]
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    loader.connection = mock_conn
+
+    df = pd.DataFrame({"col1": [1, 2]})
+    with pytest.raises(IOError, match="Failed to load data into Databricks from S3"):
+        loader.load_dataframe(df, "test_table")
+
+    mock_s3.delete_object.assert_not_called()
+
+
+@patch("py_universal_loader.databricks_loader.uuid.uuid4", return_value="test-uuid")
+@patch("py_universal_loader.databricks_loader.boto3.client")
+def test_load_dataframe_if_exists_append(mock_boto3_client, mock_uuid, config):
+    """
+    Tests that DROP TABLE is not called when if_exists is 'append'.
+    """
+    config["if_exists"] = "append"
+    loader = DatabricksLoader(config)
+    mock_s3 = MagicMock()
+    mock_boto3_client.return_value = mock_s3
+    loader.s3_client = mock_s3
+
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    loader.connection = mock_conn
+
+    df = pd.DataFrame({"col1": [1, 2]})
+    table_name = "test_table"
+
+    loader.load_dataframe(df, table_name)
+
+    # Assert that DROP TABLE was NOT called
+    for call in mock_cursor.execute.call_args_list:
+        assert "DROP TABLE" not in call.args[0]
+
+    # Assert that CREATE TABLE IF NOT EXISTS was called
+    mock_cursor.execute.assert_any_call(
+        "CREATE TABLE IF NOT EXISTS test_table (`col1` BIGINT);"
+    )
+
+
+def test_load_dataframe_if_exists_invalid(config):
+    """
+    Tests that a ValueError is raised for an invalid if_exists option.
+    """
+    config["if_exists"] = "invalid_option"
+    loader = DatabricksLoader(config)
+    loader.connection = MagicMock()
+    loader.s3_client = MagicMock()
+
+    df = pd.DataFrame({"col1": [1, 2]})
+    with pytest.raises(
+        ValueError, match="Unsupported if_exists option: invalid_option"
+    ):
+        loader.load_dataframe(df, "test_table")
