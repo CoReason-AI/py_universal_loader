@@ -3,3 +3,5 @@ theme:
   name: material
 nav:
   - Home: index.md
+  - API Reference: api.md
+  - Supported Databases: loaders.md
